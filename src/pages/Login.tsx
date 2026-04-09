@@ -133,7 +133,7 @@ const Login = () => {
     setResetLoading(true);
 
     try {
-      const { error } = await (authClient as any).requestPasswordReset({
+      const { error } = await authClient.forgetPassword({
         email: resetEmail.trim(),
         redirectTo: `${window.location.origin}/update-password`,
       });

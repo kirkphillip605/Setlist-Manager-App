@@ -4,9 +4,18 @@ import type { Profile } from '@/types';
 
 const API_URL = import.meta.env.VITE_API_URL as string;
 
+const emailAndPasswordClient = () => ({
+  id: 'email-and-password' as const,
+  getActions: ($fetch: (path: string, opts: Record<string, unknown>) => Promise<{ data: unknown; error: { message: string; status: number } | null }>) => ({
+    forgetPassword: (data: { email: string; redirectTo?: string }) =>
+      $fetch('/request-password-reset', { method: 'POST', body: data as unknown as Record<string, unknown> }),
+  }),
+});
+
 export const authClient = createAuthClient({
   baseURL: `${API_URL}/api/auth`,
   plugins: [
+    emailAndPasswordClient(),
     inferAdditionalFields<{
       user: {
         firstName?: string;
