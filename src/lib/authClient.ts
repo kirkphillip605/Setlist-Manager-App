@@ -4,11 +4,14 @@ import type { Profile } from '@/types';
 
 const API_URL = import.meta.env.VITE_API_URL as string;
 
+type ForgetPasswordData = { email: string; redirectTo?: string };
+type AuthFetchResult = Promise<{ data: unknown; error: { message: string; status: number } | null }>;
+
 const emailAndPasswordClient = () => ({
   id: 'email-and-password' as const,
-  getActions: ($fetch: (path: string, opts: Record<string, unknown>) => Promise<{ data: unknown; error: { message: string; status: number } | null }>) => ({
-    forgetPassword: (data: { email: string; redirectTo?: string }) =>
-      $fetch('/request-password-reset', { method: 'POST', body: data as unknown as Record<string, unknown> }),
+  getActions: ($fetch: (path: string, opts: { method: string; body: ForgetPasswordData }) => AuthFetchResult) => ({
+    forgetPassword: (data: ForgetPasswordData) =>
+      $fetch('/request-password-reset', { method: 'POST', body: data }),
   }),
 });
 
