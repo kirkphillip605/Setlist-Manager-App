@@ -1,5 +1,8 @@
 import { createAuthClient } from 'better-auth/react';
 import { inferAdditionalFields } from 'better-auth/client/plugins';
+import { magicLinkClient } from 'better-auth/client/plugins';
+import { emailOTPClient } from 'better-auth/client/plugins';
+import { phoneNumberClient } from 'better-auth/client/plugins';
 import type { Profile } from '@/types';
 
 const API_URL = import.meta.env.VITE_API_URL as string;
@@ -19,6 +22,9 @@ export const authClient = createAuthClient({
   baseURL: `${API_URL}/api/auth`,
   plugins: [
     emailAndPasswordClient(),
+    magicLinkClient(),
+    emailOTPClient(),
+    phoneNumberClient(),
     inferAdditionalFields<{
       user: {
         firstName?: string;

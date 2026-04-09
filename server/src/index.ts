@@ -36,6 +36,7 @@ app.use('*', cors({
     'http://localhost:5000',
     'http://localhost:3001',
     'capacitor://localhost',
+    'https://localhost',
   ],
   allowHeaders:  ['Content-Type', 'Authorization', 'Cookie'],
   allowMethods:  ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
@@ -45,7 +46,9 @@ app.use('*', cors({
 }));
 
 // ── BetterAuth ────────────────────────────────────────────────────
-app.on(['GET', 'POST'], '/api/auth/**', (c) => auth.handler(c.req.raw));
+app.on(['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'], '/api/auth/**', (c) =>
+  auth.handler(c.req.raw),
+);
 
 // ── Universal links ───────────────────────────────────────────────
 app.get('/.well-known/apple-app-site-association', (c) =>

@@ -1,3 +1,0 @@
-DROP TRIGGER IF EXISTS tr_gig_sessions_soft_delete_meta ON public.gig_sessions;
-DROP TRIGGER IF EXISTS tr_gig_participants_soft_delete_meta ON public.gig_session_participants;
-DROP TRIGGER IF EXISTS tr_skipped_songs_soft_delete_meta ON public.gig_skipped_songs;

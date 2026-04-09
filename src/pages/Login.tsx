@@ -16,13 +16,20 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import {
+  InputOTP,
+  InputOTPGroup,
+  InputOTPSlot,
+} from '@/components/ui/input-otp';
 import { toast } from 'sonner';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Mail, KeyRound, Wand2 } from 'lucide-react';
 import { Capacitor } from '@capacitor/core';
 import { storageAdapter } from '@/lib/storageAdapter';
 import { useTheme } from '@/components/theme-provider';
 import { LoadingDialog } from '@/components/LoadingDialog';
 import { CachedImage } from '@/components/CachedImage';
+
+type SignInMethod = 'password' | 'magic-link' | 'email-otp';
 
 const Login = () => {
   const navigate      = useNavigate();
@@ -38,14 +45,17 @@ const Login = () => {
   const [resetLoading, setResetLoading] = useState(false);
   const [isResetOpen, setIsResetOpen] = useState(false);
 
+  const [signInMethod, setSignInMethod] = useState<SignInMethod>('password');
+  const [otpSent, setOtpSent]           = useState(false);
+  const [otpValue, setOtpValue]         = useState('');
+  const [magicLinkSent, setMagicLinkSent] = useState(false);
+
   const { data: sessionData } = authClient.useSession();
 
-  // Redirect if already logged in
   useEffect(() => {
     if (sessionData?.user) navigate('/');
   }, [sessionData, navigate]);
 
-  // Dark mode detection
   useEffect(() => {
     if (theme === 'system') {
       const mq = window.matchMedia('(prefers-color-scheme: dark)');
@@ -58,7 +68,6 @@ const Login = () => {
     }
   }, [theme]);
 
-  // Restore remembered email
   useEffect(() => {
     storageAdapter.getItem('login_email').then(saved => {
       if (saved) { setEmail(saved); setRememberMe(true); }
@@ -74,19 +83,20 @@ const Login = () => {
       ? 'com.kirknetllc.setlistpro://auth/callback'
       : `${window.location.origin}/auth/callback`;
 
-  // ── Sign In ───────────────────────────────────────────────────
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-
+  const persistEmail = async () => {
     if (rememberMe) {
       await storageAdapter.setItem('login_email', email);
     } else {
       await storageAdapter.removeItem('login_email');
     }
+  };
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    await persistEmail();
 
     const { error } = await authClient.signIn.email({ email: email.trim(), password });
-
     if (error) {
       toast.error(error.message ?? 'Sign in failed');
     } else {
@@ -95,7 +105,64 @@ const Login = () => {
     setLoading(false);
   };
 
-  // ── Sign Up ───────────────────────────────────────────────────
+  const handleMagicLink = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email.trim()) { toast.error('Please enter your email'); return; }
+    setLoading(true);
+    await persistEmail();
+
+    try {
+      const { error } = await authClient.signIn.magicLink({
+        email: email.trim(),
+        callbackURL: getCallbackUrl(),
+      });
+      if (error) throw new Error(error.message ?? 'Failed to send magic link');
+      setMagicLinkSent(true);
+      toast.success('Magic link sent! Check your email.');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to send magic link');
+    }
+    setLoading(false);
+  };
+
+  const handleSendOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email.trim()) { toast.error('Please enter your email'); return; }
+    setLoading(true);
+    await persistEmail();
+
+    try {
+      const { error } = await authClient.emailOtp.sendVerificationOtp({
+        email: email.trim(),
+        type: 'sign-in',
+      });
+      if (error) throw new Error(error.message ?? 'Failed to send code');
+      setOtpSent(true);
+      toast.success('Verification code sent to your email!');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to send code');
+    }
+    setLoading(false);
+  };
+
+  const handleVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (otpValue.length < 6) { toast.error('Please enter the full code'); return; }
+    setLoading(true);
+
+    try {
+      const { error } = await authClient.signIn.emailOtp({
+        email: email.trim(),
+        otp: otpValue,
+      });
+      if (error) throw new Error(error.message ?? 'Invalid code');
+      navigate('/');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Verification failed');
+    }
+    setLoading(false);
+  };
+
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -118,7 +185,6 @@ const Login = () => {
     setLoading(false);
   };
 
-  // ── Google OAuth ──────────────────────────────────────────────
   const handleGoogleLogin = async () => {
     await authClient.signIn.social({
       provider:    'google',
@@ -126,7 +192,6 @@ const Login = () => {
     });
   };
 
-  // ── Password Reset ────────────────────────────────────────────
   const handleForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!resetEmail) return;
@@ -146,6 +211,211 @@ const Login = () => {
     }
     setResetLoading(false);
   };
+
+  const resetSignInState = () => {
+    setOtpSent(false);
+    setOtpValue('');
+    setMagicLinkSent(false);
+  };
+
+  const renderSignInMethodSelector = () => (
+    <div className="flex gap-1 mb-4">
+      <Button
+        variant={signInMethod === 'password' ? 'default' : 'outline'}
+        size="sm"
+        className="flex-1 text-xs"
+        type="button"
+        onClick={() => { setSignInMethod('password'); resetSignInState(); }}
+      >
+        <KeyRound className="mr-1 h-3 w-3" />
+        Password
+      </Button>
+      <Button
+        variant={signInMethod === 'magic-link' ? 'default' : 'outline'}
+        size="sm"
+        className="flex-1 text-xs"
+        type="button"
+        onClick={() => { setSignInMethod('magic-link'); resetSignInState(); }}
+      >
+        <Wand2 className="mr-1 h-3 w-3" />
+        Magic Link
+      </Button>
+      <Button
+        variant={signInMethod === 'email-otp' ? 'default' : 'outline'}
+        size="sm"
+        className="flex-1 text-xs"
+        type="button"
+        onClick={() => { setSignInMethod('email-otp'); resetSignInState(); }}
+      >
+        <Mail className="mr-1 h-3 w-3" />
+        Email Code
+      </Button>
+    </div>
+  );
+
+  const renderPasswordForm = () => (
+    <form onSubmit={handleLogin} className="space-y-4">
+      <div className="space-y-2">
+        <Label htmlFor="email-login">Email</Label>
+        <Input
+          id="email-login" type="email" placeholder="band@example.com"
+          value={email} onChange={e => setEmail(e.target.value)}
+          required autoComplete="email"
+        />
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="password-login">Password</Label>
+        <Input
+          id="password-login" type="password"
+          value={password} onChange={e => setPassword(e.target.value)}
+          required autoComplete="current-password"
+        />
+      </div>
+      <div className="flex items-center space-x-2">
+        <Checkbox id="remember" checked={rememberMe} onCheckedChange={c => setRememberMe(!!c)} />
+        <Label htmlFor="remember" className="text-sm font-normal leading-none cursor-pointer">
+          Remember email
+        </Label>
+      </div>
+      <Button type="submit" className="w-full" disabled={loading}>
+        {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+        Sign In
+      </Button>
+    </form>
+  );
+
+  const renderMagicLinkForm = () => (
+    <form onSubmit={handleMagicLink} className="space-y-4">
+      <div className="space-y-2">
+        <Label htmlFor="email-magic">Email</Label>
+        <Input
+          id="email-magic" type="email" placeholder="band@example.com"
+          value={email} onChange={e => setEmail(e.target.value)}
+          required autoComplete="email"
+        />
+      </div>
+      <div className="flex items-center space-x-2">
+        <Checkbox id="remember-magic" checked={rememberMe} onCheckedChange={c => setRememberMe(!!c)} />
+        <Label htmlFor="remember-magic" className="text-sm font-normal leading-none cursor-pointer">
+          Remember email
+        </Label>
+      </div>
+      {magicLinkSent ? (
+        <div className="text-center space-y-3">
+          <div className="p-3 rounded-lg bg-muted">
+            <Mail className="h-8 w-8 mx-auto mb-2 text-primary" />
+            <p className="text-sm font-medium">Check your email!</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              We sent a magic link to <strong>{email}</strong>
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="text-xs"
+            onClick={() => setMagicLinkSent(false)}
+          >
+            Send again
+          </Button>
+        </div>
+      ) : (
+        <Button type="submit" className="w-full" disabled={loading}>
+          {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          Send Magic Link
+        </Button>
+      )}
+    </form>
+  );
+
+  const renderEmailOtpForm = () => (
+    <>
+      {!otpSent ? (
+        <form onSubmit={handleSendOtp} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="email-otp">Email</Label>
+            <Input
+              id="email-otp" type="email" placeholder="band@example.com"
+              value={email} onChange={e => setEmail(e.target.value)}
+              required autoComplete="email"
+            />
+          </div>
+          <div className="flex items-center space-x-2">
+            <Checkbox id="remember-otp" checked={rememberMe} onCheckedChange={c => setRememberMe(!!c)} />
+            <Label htmlFor="remember-otp" className="text-sm font-normal leading-none cursor-pointer">
+              Remember email
+            </Label>
+          </div>
+          <Button type="submit" className="w-full" disabled={loading}>
+            {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Send Code
+          </Button>
+        </form>
+      ) : (
+        <form onSubmit={handleVerifyOtp} className="space-y-4">
+          <div className="text-center space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Enter the 6-digit code sent to <strong>{email}</strong>
+            </p>
+            <div className="flex justify-center">
+              <InputOTP
+                maxLength={6}
+                value={otpValue}
+                onChange={setOtpValue}
+              >
+                <InputOTPGroup>
+                  <InputOTPSlot index={0} />
+                  <InputOTPSlot index={1} />
+                  <InputOTPSlot index={2} />
+                  <InputOTPSlot index={3} />
+                  <InputOTPSlot index={4} />
+                  <InputOTPSlot index={5} />
+                </InputOTPGroup>
+              </InputOTP>
+            </div>
+          </div>
+          <Button type="submit" className="w-full" disabled={loading || otpValue.length < 6}>
+            {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Verify & Sign In
+          </Button>
+          <div className="flex justify-between">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="text-xs"
+              onClick={() => { setOtpSent(false); setOtpValue(''); }}
+            >
+              Change email
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="text-xs"
+              disabled={loading}
+              onClick={async () => {
+                setLoading(true);
+                try {
+                  await authClient.emailOtp.sendVerificationOtp({
+                    email: email.trim(),
+                    type: 'sign-in',
+                  });
+                  toast.success('New code sent!');
+                  setOtpValue('');
+                } catch {
+                  toast.error('Failed to resend code');
+                }
+                setLoading(false);
+              }}
+            >
+              Resend code
+            </Button>
+          </div>
+        </form>
+      )}
+    </>
+  );
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4 overflow-y-auto">
@@ -168,70 +438,50 @@ const Login = () => {
               <TabsTrigger value="register" className="text-xs">Create Account</TabsTrigger>
             </TabsList>
 
-            {/* ── Sign In Tab ── */}
             <TabsContent value="login">
-              <form onSubmit={handleLogin} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="email-login">Email</Label>
-                  <Input
-                    id="email-login" type="email" placeholder="band@example.com"
-                    value={email} onChange={e => setEmail(e.target.value)}
-                    required autoComplete="email"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="password-login">Password</Label>
-                  <Input
-                    id="password-login" type="password"
-                    value={password} onChange={e => setPassword(e.target.value)}
-                    required autoComplete="current-password"
-                  />
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Checkbox id="remember" checked={rememberMe} onCheckedChange={c => setRememberMe(!!c)} />
-                  <Label htmlFor="remember" className="text-sm font-normal leading-none cursor-pointer">
-                    Remember email
-                  </Label>
-                </div>
-                <Button type="submit" className="w-full" disabled={loading}>Sign In</Button>
-              </form>
+              {renderSignInMethodSelector()}
 
-              <div className="text-center mt-4">
-                <Dialog open={isResetOpen} onOpenChange={setIsResetOpen}>
-                  <DialogTrigger asChild>
-                    <Button variant="link" type="button" className="px-0 h-auto text-xs font-normal text-muted-foreground">
-                      Forgot password?
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent>
-                    <DialogHeader>
-                      <DialogTitle>Reset Password</DialogTitle>
-                      <DialogDescription>
-                        Enter your email and we'll send a reset link.
-                      </DialogDescription>
-                    </DialogHeader>
-                    <form onSubmit={handleForgotPassword} className="space-y-4 py-2">
-                      <div className="space-y-2">
-                        <Label htmlFor="reset-email">Email</Label>
-                        <Input
-                          id="reset-email" type="email"
-                          value={resetEmail} onChange={e => setResetEmail(e.target.value)}
-                          required autoComplete="email"
-                        />
-                      </div>
-                      <DialogFooter>
-                        <Button type="submit" disabled={resetLoading}>
-                          {resetLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                          Send Reset Link
-                        </Button>
-                      </DialogFooter>
-                    </form>
-                  </DialogContent>
-                </Dialog>
-              </div>
+              {signInMethod === 'password' && renderPasswordForm()}
+              {signInMethod === 'magic-link' && renderMagicLinkForm()}
+              {signInMethod === 'email-otp' && renderEmailOtpForm()}
+
+              {signInMethod === 'password' && (
+                <div className="text-center mt-4">
+                  <Dialog open={isResetOpen} onOpenChange={setIsResetOpen}>
+                    <DialogTrigger asChild>
+                      <Button variant="link" type="button" className="px-0 h-auto text-xs font-normal text-muted-foreground">
+                        Forgot password?
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent>
+                      <DialogHeader>
+                        <DialogTitle>Reset Password</DialogTitle>
+                        <DialogDescription>
+                          Enter your email and we'll send a reset link.
+                        </DialogDescription>
+                      </DialogHeader>
+                      <form onSubmit={handleForgotPassword} className="space-y-4 py-2">
+                        <div className="space-y-2">
+                          <Label htmlFor="reset-email">Email</Label>
+                          <Input
+                            id="reset-email" type="email"
+                            value={resetEmail} onChange={e => setResetEmail(e.target.value)}
+                            required autoComplete="email"
+                          />
+                        </div>
+                        <DialogFooter>
+                          <Button type="submit" disabled={resetLoading}>
+                            {resetLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                            Send Reset Link
+                          </Button>
+                        </DialogFooter>
+                      </form>
+                    </DialogContent>
+                  </Dialog>
+                </div>
+              )}
             </TabsContent>
 
-            {/* ── Register Tab ── */}
             <TabsContent value="register">
               <form onSubmit={handleSignUp} className="space-y-4">
                 <div className="grid grid-cols-2 gap-3">
@@ -269,6 +519,7 @@ const Login = () => {
                   />
                 </div>
                 <Button type="submit" className="w-full" disabled={loading}>
+                  {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   Create Account
                 </Button>
               </form>

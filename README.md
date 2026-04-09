@@ -1,113 +1,168 @@
-# Bad Habits - Setlist Management
+# SetlistPRO
 
-A comprehensive setlist and band management application built with React, TypeScript, Vite, Supabase, and Shadcn/UI.
+A full-featured setlist and gig management application for bands. Built with React, TypeScript, Vite, and Capacitor for web (PWA) and native (iOS/Android) deployment.
 
 ## Features
 
-- **Song Management**: Store lyrics, keys, tempo, notes, and Spotify links.
-- **Setlists**: Create drag-and-drop setlists for gigs.
-- **Performance Mode**: Distraction-free view for live performance with quick song switching and dark mode.
-- **Metronome**: Built-in visual and audio metronome.
-- **Spotify Integration**: Auto-fill song details (Key, BPM, Cover Art) from Spotify.
-- **Role-Based Access**: Admin and Member roles.
-- **Responsive Design**: Works on mobile, tablet, and desktop.
+- **Song Management** — Store lyrics, keys, tempo, notes, and Spotify metadata
+- **Setlists** — Create and arrange drag-and-drop setlists with multiple sets
+- **Gig Management** — Track upcoming and past gigs with venue details
+- **Performance Mode** — Distraction-free live view with quick song switching and dark mode
+- **Real-Time Collaboration** — WebSocket-powered live session sync for band members
+- **Multi-Tenant** — Each band is a separate tenant; users can belong to multiple bands
+- **Role-Based Access** — Platform roles (admin/user) and per-band roles (owner/manager/member)
+- **Offline Support** — IndexedDB caching with background sync
+- **Spotify Integration** — Auto-fill song details (key, BPM, cover art) from Spotify
+
+## Architecture
+
+### Frontend
+- **Framework**: React 18 + Vite 5 + TypeScript
+- **Routing**: React Router v6
+- **Auth**: BetterAuth client (`better-auth/react`)
+- **State**: Zustand (per-band store) + TanStack Query (offline-persist)
+- **Styling**: Tailwind CSS + shadcn/ui
+- **Real-time**: WebSocket client
+- **Mobile**: Capacitor 8 (iOS + Android)
+
+### Backend
+- **Server**: Hono (Node.js) — `server/`
+- **Auth**: BetterAuth with email/password, Google OAuth, magic link, email OTP, phone/SMS (Twilio)
+- **Email**: Mailjet transactional email
+- **Database**: PostgreSQL via Drizzle ORM
+- **Real-time**: WebSocket server + PostgreSQL LISTEN/NOTIFY
+
+### Domains
+| Environment | URL |
+|---|---|
+| Frontend | `https://setlist.kirknet.io` |
+| API | `https://api.setlist.kirknet.io` |
 
 ## Prerequisites
 
-- Node.js (v18+)
-- Supabase Account
-- Spotify Developer Account (for auto-fill features)
+- Node.js 18+
+- PostgreSQL 15+
+- Google OAuth credentials
+- Mailjet account (for transactional email)
+- Twilio account (optional, for SMS/phone verification)
+- Spotify Developer account (optional, for song metadata)
 
-## Installation
+## Getting Started
 
-1. Clone the repository
-2. Install dependencies:
-   ```bash
-   npm install
-   ```
-3. Copy the example environment file:
-   ```bash
-   cp .env.example .env
-   ```
-4. Fill in your environment variables in `.env`.
+### 1. Clone and install
 
-## Supabase Setup (Important)
-
-### 1. Database Schema
-The database schema and RLS policies are handled via SQL migrations provided in the Dyad context. Ensure you have the following tables:
-- `profiles` (extends auth.users)
-- `songs`
-- `setlists`
-- `sets`
-- `set_songs`
-
-### 2. Authentication Configuration
-
-**Google Login:**
-1. Go to **Supabase Dashboard** -> **Authentication** -> **Providers**.
-2. Enable **Google**.
-3. You need a Google Cloud Project. Go to [Google Cloud Console](https://console.cloud.google.com/).
-   - Create a project.
-   - Go to **APIs & Services** -> **OAuth consent screen**. Set it up (External).
-   - Go to **Credentials** -> **Create Credentials** -> **OAuth client ID** (Web application).
-   - **Authorized JavaScript origins**: `https://your-project.supabase.co`
-   - **Authorized redirect URIs**: `https://your-project.supabase.co/auth/v1/callback`
-4. Copy the **Client ID** and **Client Secret** into the Supabase Google Provider settings.
-
-**URL Configuration (CORS for Auth):**
-1. Go to **Supabase Dashboard** -> **Authentication** -> **URL Configuration**.
-2. **Site URL**: Set this to your production URL (e.g., `https://setlist.kirknet.io`).
-3. **Redirect URIs**: Add any other URLs where the app might be hosted (e.g., `http://localhost:8080`, `https://your-preview-url.vercel.app`).
-   - *This is critical for the "Sign in with Google" redirect to work properly.*
-
-### 3. Edge Functions
-This project uses Supabase Edge Functions for admin actions (inviting users, deleting users).
-
-1. Deploy the functions:
-   ```bash
-   supabase functions deploy admin-actions
-   ```
-2. Set Environment Variables in Supabase Dashboard -> **Edge Functions** -> **admin-actions** -> **Manage Secrets**:
-   - `ALLOWED_ORIGINS`: Comma-separated list of your app domains (e.g. `https://setlist.kirknet.io,http://localhost:8080`).
-
-## Deployment
-
-### Docker / Nginx
-This app is designed to be served as a static site.
-1. Build the app:
-   ```bash
-   npm run build
-   ```
-2. The output will be in the `dist` folder.
-3. Serve the `dist` folder using Nginx, Apache, or any static file server.
-4. Ensure your Nginx config handles SPA routing (redirect all 404s to `index.html`).
-
-**Example Nginx Location Block:**
-```nginx
-location / {
-    root /path/to/dist;
-    try_files $uri $uri/ /index.html;
-}
-```
-
-### Vite Preview
-You can also run the app using Vite's preview server (Node.js):
 ```bash
-npm run start
+git clone <repo-url>
+cd Setlist-Manager-App
+
+# Frontend dependencies
+npm install
+
+# Server dependencies
+cd server && npm install && cd ..
 ```
-This will listen on the port defined in your `.env` file (default 8080).
 
-## Environment Variables
+### 2. Configure environment
 
-| Variable | Description |
-|----------|-------------|
-| `PORT` | The port the Vite server listens on (default 8080) |
-| `HOST` | The host address to bind to (default 0.0.0.0) |
-| `VITE_SUPABASE_URL` | Your Supabase Project URL |
-| `VITE_SUPABASE_ANON_KEY` | Your Supabase Anon/Public Key |
-| `VITE_SPOTIFY_CLIENT_ID` | Spotify App Client ID |
-| `VITE_SPOTIFY_CLIENT_SECRET` | Spotify App Client Secret |
+```bash
+# Frontend
+cp .env.example .env
+# Edit .env with your values
 
----
+# Server
+cp server/.env.example server/.env
+# Edit server/.env with your values
+```
 
-Made with ❤️ by Dyad
+See `.env.example` and `server/.env.example` for all available configuration options.
+
+### 3. Run database migrations
+
+```bash
+cd server
+npx tsx src/db/migrate.ts   # or apply server/migrations/*.sql manually
+```
+
+### 4. Start development
+
+```bash
+# Terminal 1 — API server
+cd server && npm run dev
+
+# Terminal 2 — Frontend
+npm run dev
+```
+
+The frontend runs on `http://localhost:5000` and the API on `http://localhost:3001`.
+
+## Authentication
+
+SetlistPRO uses [BetterAuth](https://www.better-auth.com/) with the following methods:
+
+| Method | Description |
+|---|---|
+| Email + Password | Standard sign-up/sign-in with optional email verification |
+| Google OAuth | Social login with PKCE support for mobile |
+| Magic Link | Passwordless email sign-in |
+| Email OTP | One-time passcode sent via email |
+| Phone/SMS | Phone number verification via Twilio |
+
+Sessions are configured for long-duration persistence (default: 365 days) so users remain logged in unless they explicitly sign out or their account is deactivated.
+
+All auth configuration is environment-driven — see `server/.env.example` for available settings (`SESSION_MAX_AGE_DAYS`, `REQUIRE_EMAIL_VERIFICATION`, `OTP_LENGTH`, etc.).
+
+## Mobile (Capacitor)
+
+### iOS
+```bash
+npx cap sync ios
+npx cap open ios
+```
+
+### Android
+```bash
+npx cap sync android
+npx cap open android
+```
+
+Deep linking is configured for both platforms:
+- **iOS**: Custom URL scheme (`com.kirknetllc.setlistpro://`) + Universal Links (`setlist.kirknet.io`)
+- **Android**: Custom URL scheme + App Links with `autoVerify`
+
+## Deployment (EC2)
+
+The API runs on EC2 via docker-compose. See `server/deploy.sh` for the deployment script.
+
+```bash
+# From local machine
+cd server
+./deploy.sh
+```
+
+## Project Structure
+
+```
+.
+├── src/                    # Frontend (React + Vite)
+│   ├── components/         # Shared UI components (shadcn/ui)
+│   ├── context/            # React context providers (Auth, Band)
+│   ├── hooks/              # Custom hooks
+│   ├── lib/                # API client, auth client, store, utilities
+│   └── pages/              # Route pages
+├── server/                 # Backend (Hono + BetterAuth)
+│   ├── src/
+│   │   ├── db/             # Drizzle ORM schema + migrations
+│   │   ├── lib/            # Email (Mailjet) + SMS (Twilio) transports
+│   │   ├── middleware/     # Auth middleware
+│   │   ├── routes/         # API route handlers
+│   │   └── ws/             # WebSocket server + pg LISTEN
+│   └── migrations/         # SQL migration files
+├── ios/                    # Capacitor iOS project
+├── android/                # Capacitor Android project
+├── public/                 # Static assets
+└── capacitor.config.ts     # Capacitor configuration
+```
+
+## License
+
+Proprietary — KirkNet LLC
