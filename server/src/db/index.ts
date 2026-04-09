@@ -13,7 +13,7 @@ function buildSafeConnectionString(raw: string): string {
     return raw;
   } catch {
     const match = raw.match(
-      /^(postgresql|postgres):\/\/([^:]*):(.*)@(\[[^\]]+\]|[^:]+):(\d+)\/(.+)$/
+      /^(postgresql|postgres):\/\/([^:]*):(.*)@(\[[^\]]+\]|[^:]+?)(?::(\d+))?\/(.+)$/
     );
     if (!match) {
       throw new Error(
@@ -23,7 +23,8 @@ function buildSafeConnectionString(raw: string): string {
     const [, protocol, user, password, host, port, dbAndParams] = match;
     const encodedUser = encodeURIComponent(user);
     const encodedPassword = encodeURIComponent(password);
-    return `${protocol}://${encodedUser}:${encodedPassword}@${host}:${port}/${dbAndParams}`;
+    const portPart = port ? `:${port}` : '';
+    return `${protocol}://${encodedUser}:${encodedPassword}@${host}${portPart}/${dbAndParams}`;
   }
 }
 
