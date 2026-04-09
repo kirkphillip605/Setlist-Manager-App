@@ -4,7 +4,6 @@ import { bearer } from 'better-auth/plugins/bearer';
 import { magicLink } from 'better-auth/plugins/magic-link';
 import { emailOTP } from 'better-auth/plugins/email-otp';
 import { phoneNumber } from 'better-auth/plugins/phone-number';
-import { openAPI } from 'better-auth/plugins/open-api';
 import { db } from './db/index.js';
 import * as schema from './db/schema.js';
 import {
@@ -132,7 +131,6 @@ export const auth = betterAuth({
       expiresIn: OTP_EXPIRY_SECONDS,
     }),
 
-    openAPI(),
   ],
 });
 

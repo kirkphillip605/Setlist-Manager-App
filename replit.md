@@ -18,7 +18,7 @@ A React + Vite PWA / Capacitor app for band setlist and gig management with full
 
 ### Backend (Hono + BetterAuth)
 - **Server**: Hono (Node.js) at `api.setlist.kirknet.io`
-- **Auth**: BetterAuth with plugins: `bearer`, `magicLink`, `emailOTP`, `phoneNumber`, `openAPI`
+- **Auth**: BetterAuth with plugins: `bearer`, `magicLink`, `emailOTP`, `phoneNumber`
 - **Email**: Mailjet transactional email (`server/src/lib/email.ts`)
 - **SMS**: Twilio (`server/src/lib/sms.ts`)
 - **Database**: PostgreSQL via Drizzle ORM (`server/src/db/`)
