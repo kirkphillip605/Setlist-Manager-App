@@ -32,26 +32,56 @@ async function getSpotifyToken(): Promise<string> {
   return spotifyToken;
 }
 
-// GET /api/spotify/search?q=...&type=track,artist
+function formatDuration(ms: number): string {
+  const minutes = Math.floor(ms / 60000);
+  const seconds = Math.floor((ms % 60000) / 1000);
+  return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
+}
+
 app.get('/search', requireAuth, async (c) => {
   const q = c.req.query('q');
-  const type = c.req.query('type') ?? 'track';
-
   if (!q) return c.json({ error: 'q param required' }, 400);
 
   try {
     const token = await getSpotifyToken();
-    const url = `https://api.spotify.com/v1/search?q=${encodeURIComponent(q)}&type=${type}&limit=10`;
+    const url = `https://api.spotify.com/v1/search?q=${encodeURIComponent(q)}&type=track&limit=20`;
     const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
     if (!res.ok) throw new Error(`Spotify API error: ${res.status}`);
-    return c.json(await res.json());
+
+    const data = await res.json() as any;
+    const tracks = data.tracks?.items ?? [];
+
+    const seen = new Set<string>();
+    const results: any[] = [];
+
+    for (const track of tracks) {
+      const artist = (track.artists ?? []).map((a: any) => a.name).join(', ');
+      const title = track.name;
+      const key = `${artist.toLowerCase().trim()}|${title.toLowerCase().trim()}`;
+
+      if (seen.has(key)) continue;
+      seen.add(key);
+
+      results.push({
+        id: track.id,
+        title: track.name,
+        artist,
+        album: track.album?.name ?? '',
+        coverUrl: track.album?.images?.[1]?.url || track.album?.images?.[0]?.url || '',
+        spotifyUrl: track.external_urls?.spotify || '',
+        duration: track.duration_ms ? formatDuration(track.duration_ms) : '',
+      });
+
+      if (results.length >= 10) break;
+    }
+
+    return c.json(results);
   } catch (err: any) {
     console.error('[Spotify] Search error:', err.message);
     return c.json({ error: 'Spotify search failed' }, 502);
   }
 });
 
-// GET /api/spotify/track/:id
 app.get('/track/:id', requireAuth, async (c) => {
   const id = c.req.param('id');
   try {
