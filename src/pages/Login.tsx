@@ -133,19 +133,11 @@ const Login = () => {
     setResetLoading(true);
 
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/auth/request-password-reset`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: resetEmail.trim(),
-          redirectTo: `${window.location.origin}/update-password`,
-        }),
+      const { error } = await (authClient as any).requestPasswordReset({
+        email: resetEmail.trim(),
+        redirectTo: `${window.location.origin}/update-password`,
       });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error((body as any)?.message ?? `Request failed (${res.status})`);
-      }
+      if (error) throw new Error(error.message ?? 'Request failed');
       toast.success('Password reset link sent!');
       setIsResetOpen(false);
       setResetEmail('');
