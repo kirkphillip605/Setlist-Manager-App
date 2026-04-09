@@ -4,7 +4,7 @@
   "version": "3.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "vite --port 5000 --host 0.0.0.0",
     "build": "tsc -b && vite build && npm run set-version",
     "set-version": "capacitor-set-version . -v $npm_package_version -b $BUILD_NUMBER",
     "preview": "vite preview",
