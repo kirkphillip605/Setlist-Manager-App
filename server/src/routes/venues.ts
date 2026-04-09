@@ -9,13 +9,59 @@ interface AddressComponent {
   types: string[];
 }
 
+interface ParsedAddress {
+  houseNumber: string;
+  street: string;
+  city: string;
+  stateCode: string;
+  state: string;
+  postalCode: string;
+  countryName: string;
+  countryCode: string;
+  label: string;
+}
+
+interface VenueItem {
+  id: string;
+  title: string;
+  address: ParsedAddress;
+}
+
+interface GoogleTextSearchResult {
+  place_id: string;
+  name: string;
+  formatted_address: string;
+  geometry: { location: { lat: number; lng: number } };
+}
+
+interface GoogleTextSearchResponse {
+  results: GoogleTextSearchResult[];
+}
+
+interface GooglePlaceDetailsResponse {
+  result?: {
+    address_components?: AddressComponent[];
+  };
+}
+
+interface GoogleAutocompletePrediction {
+  place_id: string;
+  description: string;
+  structured_formatting: {
+    main_text: string;
+    secondary_text: string;
+  };
+}
+
+interface GoogleAutocompleteResponse {
+  predictions: GoogleAutocompletePrediction[];
+}
+
 function parseAddressComponents(components: AddressComponent[]) {
   const get = (type: string) => components.find(c => c.types.includes(type));
-  const streetNumber = get('street_number')?.long_name ?? '';
-  const route = get('route')?.long_name ?? '';
   return {
-    houseNumber: streetNumber,
-    street: route,
+    houseNumber: get('street_number')?.long_name ?? '',
+    street: get('route')?.long_name ?? '',
     city: get('locality')?.long_name ?? get('sublocality')?.long_name ?? '',
     stateCode: get('administrative_area_level_1')?.short_name ?? '',
     state: get('administrative_area_level_1')?.long_name ?? '',
@@ -35,13 +81,13 @@ app.get('/search', requireAuth, async (c) => {
   try {
     const textSearchUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(q)}&type=establishment&key=${apiKey}`;
     const searchRes = await fetch(textSearchUrl);
-    const searchData = await searchRes.json() as { results: any[] };
+    const searchData = await searchRes.json() as GoogleTextSearchResponse;
 
     const places = (searchData.results ?? []).slice(0, 10);
 
-    const items = await Promise.all(
-      places.map(async (place: any) => {
-        let addr = {
+    const items: VenueItem[] = await Promise.all(
+      places.map(async (place) => {
+        let addr: ParsedAddress = {
           houseNumber: '',
           street: '',
           city: '',
@@ -56,7 +102,7 @@ app.get('/search', requireAuth, async (c) => {
         try {
           const detailsUrl = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${place.place_id}&fields=address_component&key=${apiKey}`;
           const detailsRes = await fetch(detailsUrl);
-          const detailsData = await detailsRes.json() as { result?: { address_components?: AddressComponent[] } };
+          const detailsData = await detailsRes.json() as GooglePlaceDetailsResponse;
 
           if (detailsData.result?.address_components) {
             const parsed = parseAddressComponents(detailsData.result.address_components);
@@ -75,8 +121,9 @@ app.get('/search', requireAuth, async (c) => {
     );
 
     return c.json(items);
-  } catch (err: any) {
-    console.error('[Venues] Search error:', err.message);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    console.error('[Venues] Search error:', message);
     return c.json([]);
   }
 });
@@ -91,9 +138,9 @@ app.get('/autocomplete', requireAuth, async (c) => {
   try {
     const url = `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(q)}&types=establishment&key=${apiKey}`;
     const res = await fetch(url);
-    const data = await res.json() as { predictions: any[] };
+    const data = await res.json() as GoogleAutocompleteResponse;
 
-    const items = (data.predictions ?? []).slice(0, 10).map((p: any) => ({
+    const items = (data.predictions ?? []).slice(0, 10).map((p) => ({
       title: p.structured_formatting?.main_text ?? p.description,
       id: p.place_id,
       address: p.description,
@@ -105,8 +152,9 @@ app.get('/autocomplete', requireAuth, async (c) => {
     }));
 
     return c.json({ items });
-  } catch (err: any) {
-    console.error('[Venues] Autocomplete error:', err.message);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    console.error('[Venues] Autocomplete error:', message);
     return c.json({ items: [] });
   }
 });

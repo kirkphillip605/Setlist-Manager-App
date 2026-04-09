@@ -3,6 +3,51 @@ import { requireAuth, type AuthVariables } from '../middleware/auth.js';
 
 const app = new Hono<{ Variables: AuthVariables }>();
 
+interface SpotifyTokenResponse {
+  access_token: string;
+  expires_in: number;
+}
+
+interface SpotifyArtist {
+  name: string;
+}
+
+interface SpotifyImage {
+  url: string;
+  height: number;
+  width: number;
+}
+
+interface SpotifyAlbum {
+  name: string;
+  images: SpotifyImage[];
+}
+
+interface SpotifyTrack {
+  id: string;
+  name: string;
+  artists: SpotifyArtist[];
+  album: SpotifyAlbum;
+  external_urls: { spotify: string };
+  duration_ms: number;
+}
+
+interface SpotifySearchResponse {
+  tracks: {
+    items: SpotifyTrack[];
+  };
+}
+
+interface MusicResult {
+  id: string;
+  title: string;
+  artist: string;
+  album: string;
+  coverUrl: string;
+  spotifyUrl: string;
+  duration: string;
+}
+
 let spotifyToken: string | null = null;
 let tokenExpiresAt = 0;
 
@@ -26,7 +71,7 @@ async function getSpotifyToken(): Promise<string> {
 
   if (!res.ok) throw new Error('Failed to get Spotify token');
 
-  const data = await res.json() as { access_token: string; expires_in: number };
+  const data = await res.json() as SpotifyTokenResponse;
   spotifyToken = data.access_token;
   tokenExpiresAt = Date.now() + data.expires_in * 1000;
   return spotifyToken;
@@ -48,14 +93,14 @@ app.get('/search', requireAuth, async (c) => {
     const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
     if (!res.ok) throw new Error(`Spotify API error: ${res.status}`);
 
-    const data = await res.json() as any;
+    const data = await res.json() as SpotifySearchResponse;
     const tracks = data.tracks?.items ?? [];
 
     const seen = new Set<string>();
-    const results: any[] = [];
+    const results: MusicResult[] = [];
 
     for (const track of tracks) {
-      const artist = (track.artists ?? []).map((a: any) => a.name).join(', ');
+      const artist = (track.artists ?? []).map((a) => a.name).join(', ');
       const title = track.name;
       const key = `${artist.toLowerCase().trim()}|${title.toLowerCase().trim()}`;
 
@@ -76,8 +121,9 @@ app.get('/search', requireAuth, async (c) => {
     }
 
     return c.json(results);
-  } catch (err: any) {
-    console.error('[Spotify] Search error:', err.message);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    console.error('[Spotify] Search error:', message);
     return c.json({ error: 'Spotify search failed' }, 502);
   }
 });
@@ -90,8 +136,10 @@ app.get('/track/:id', requireAuth, async (c) => {
       headers: { Authorization: `Bearer ${token}` },
     });
     if (!res.ok) throw new Error(`Spotify API error: ${res.status}`);
-    return c.json(await res.json());
-  } catch (err: any) {
+    return c.json(await res.json() as SpotifyTrack);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    console.error('[Spotify] Track fetch error:', message);
     return c.json({ error: 'Spotify fetch failed' }, 502);
   }
 });
