@@ -173,6 +173,8 @@ export interface GigSession {
   last_heartbeat: string;
   ended_at?: string | null;
   version: number;
+  participant_ids?: string[];
+  leader_name?: string;
 }
 
 // ---------------------------------------------------------------

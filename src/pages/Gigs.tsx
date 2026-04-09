@@ -23,6 +23,7 @@ import { LoadingDialog } from "@/components/LoadingDialog";
 import { format, parseISO } from "date-fns";
 import { GigCreateWizard } from "@/components/GigCreateWizard";
 import { useAuth } from "@/context/AuthContext";
+import { useBand } from "@/context/BandContext";
 import { PerformanceSessionDialog } from "@/components/PerformanceSessionDialog";
 
 const Gigs = () => {
@@ -30,6 +31,7 @@ const Gigs = () => {
     const queryClient = useQueryClient();
     const isOnline = useNetworkStatus();
     const { canManageGigs } = useAuth();
+    const { activeBandId } = useBand();
     
     const [isCreateOpen, setIsCreateOpen] = useState(false);
     const [showPast, setShowPast] = useState(false);
@@ -63,9 +65,9 @@ const Gigs = () => {
 
     const cancelMutation = useMutation({
         mutationFn: async () => {
-            if (!gigToCancel) return;
+            if (!gigToCancel || !activeBandId) return;
             const reason = cancelReason === 'Other' ? customReason : cancelReason;
-            await cancelGig(gigToCancel.id, reason);
+            await cancelGig(activeBandId, gigToCancel.id, reason);
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['gigs'] });
@@ -90,7 +92,7 @@ const Gigs = () => {
                 endISO = new Date(eDate.getTime() - offset).toISOString();
             }
 
-            await saveGig({ 
+            await saveGig(activeBandId!, { 
                 ...gigToReschedule,
                 start_time: startISO,
                 end_time: endISO

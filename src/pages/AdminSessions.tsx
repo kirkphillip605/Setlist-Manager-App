@@ -14,16 +14,19 @@ import { toast } from "sonner";
 import { Loader2, Radio, Trash2, RefreshCw } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { GigSession } from "@/types";
+import { useBand } from "@/context/BandContext";
 
 const AdminSessions = () => {
+    const { activeBandId } = useBand();
     const [sessions, setSessions] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [confirmEndAll, setConfirmEndAll] = useState(false);
 
     const fetchSessions = async () => {
+        if (!activeBandId) return;
         setLoading(true);
         try {
-            const data = await getAllGigSessions();
+            const data = await getAllGigSessions(activeBandId);
             setSessions(data || []);
         } catch (e) {
             console.error(e);
@@ -35,11 +38,12 @@ const AdminSessions = () => {
 
     useEffect(() => {
         fetchSessions();
-    }, []);
+    }, [activeBandId]);
 
     const handleEndSession = async (id: string) => {
+        if (!activeBandId) return;
         try {
-            await endGigSession(id);
+            await endGigSession(activeBandId, id);
             toast.success("Session ended");
             fetchSessions();
         } catch (e) {
@@ -48,8 +52,9 @@ const AdminSessions = () => {
     };
 
     const handleEndAll = async () => {
+        if (!activeBandId) return;
         try {
-            await endAllSessions();
+            await endAllSessions(activeBandId);
             toast.success("All sessions ended");
             fetchSessions();
             setConfirmEndAll(false);
@@ -59,8 +64,9 @@ const AdminSessions = () => {
     };
 
     const handleCleanup = async () => {
+        if (!activeBandId) return;
         try {
-            await cleanupStaleSessions();
+            await cleanupStaleSessions(activeBandId);
             toast.success("Cleanup complete");
             fetchSessions();
         } catch (e) {

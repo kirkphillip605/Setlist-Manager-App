@@ -132,17 +132,21 @@ const Login = () => {
     if (!resetEmail) return;
     setResetLoading(true);
 
-    const { error } = await authClient.forgetPassword({
-      email:      resetEmail.trim(),
-      redirectTo: `${window.location.origin}/update-password`,
-    });
-
-    if (error) {
-      toast.error(error.message ?? 'Failed to send reset email');
-    } else {
+    try {
+      await fetch(`${import.meta.env.VITE_API_URL}/api/auth/forget-password`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: resetEmail.trim(),
+          redirectTo: `${window.location.origin}/update-password`,
+        }),
+      });
       toast.success('Password reset link sent!');
       setIsResetOpen(false);
       setResetEmail('');
+    } catch {
+      toast.error('Failed to send reset email');
     }
     setResetLoading(false);
   };

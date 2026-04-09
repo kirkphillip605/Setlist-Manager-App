@@ -13,6 +13,7 @@ import { Loader2, MapPin, Calendar, Edit, ListMusic, ChevronLeft, Navigation, Cl
 import { useState, useMemo } from "react";
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
+import { useBand } from "@/context/BandContext";
 import { Gig } from "@/types";
 import { useSyncedGigs, useSyncedSetlists } from "@/hooks/useSyncedData";
 import { useNetworkStatus } from "@/hooks/useNetworkStatus";
@@ -28,6 +29,7 @@ const GigDetail = () => {
     const { id } = useParams();
     const navigate = useNavigate();
     const { canManageGigs } = useAuth();
+    const { activeBandId } = useBand();
     const queryClient = useQueryClient();
     const isOnline = useNetworkStatus();
     
@@ -45,7 +47,7 @@ const GigDetail = () => {
     const bandSetlists = useMemo(() => setlists.filter(s => !s.is_personal), [setlists]);
 
     const saveMutation = useMutation({
-        mutationFn: saveGig,
+        mutationFn: (gig: Partial<Gig>) => saveGig(activeBandId!, gig),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['gigs'] });
             setIsEditOpen(false);
@@ -55,7 +57,7 @@ const GigDetail = () => {
     });
 
     const deleteMutation = useMutation({
-        mutationFn: deleteGig,
+        mutationFn: (id: string) => deleteGig(activeBandId!, id),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['gigs'] });
             toast.success("Gig deleted");

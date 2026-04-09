@@ -14,11 +14,13 @@ import { Label } from "@/components/ui/label";
 import { createSetlist } from "@/lib/api";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNetworkStatus } from "@/hooks/useNetworkStatus";
+import { useBand } from "@/context/BandContext";
 
 const PerformanceSelection = () => {
   const navigate = useNavigate();
   const isOnline = useNetworkStatus();
   const queryClient = useQueryClient();
+  const { activeBandId } = useBand();
   const [mode, setMode] = useState<"gig" | "practice" | null>(null);
   
   // Session Init State
@@ -53,7 +55,7 @@ const PerformanceSelection = () => {
 
   const createMutation = useMutation({
     mutationFn: async () => {
-       return createSetlist(newListName, true, false); // Create Personal Setlist by default
+       return createSetlist(activeBandId!, newListName, true, false); // Create Personal Setlist by default
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['setlists'] });

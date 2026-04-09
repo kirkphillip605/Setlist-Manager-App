@@ -12,6 +12,7 @@ import { Gig, Setlist } from "@/types";
 import { searchVenues, saveGig } from "@/lib/api";
 import { toast } from "sonner";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useBand } from "@/context/BandContext";
 import { cn } from "@/lib/utils";
 import { format, parseISO } from "date-fns";
 
@@ -22,6 +23,7 @@ interface GigCreateWizardProps {
 }
 
 export const GigCreateWizard = ({ open, onClose, setlists }: GigCreateWizardProps) => {
+    const { activeBandId } = useBand();
     const [step, setStep] = useState(1);
     // Step 2 Modes: 'search' (default) or 'form' (manual entry/edit)
     const [venueMode, setVenueMode] = useState<'search' | 'form'>('search');
@@ -133,7 +135,7 @@ export const GigCreateWizard = ({ open, onClose, setlists }: GigCreateWizardProp
 
     // --- FINAL SUBMISSION ---
     const saveMutation = useMutation({
-        mutationFn: saveGig,
+        mutationFn: (gig: Partial<Gig>) => saveGig(activeBandId!, gig),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['gigs'] });
             onClose();

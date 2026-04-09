@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { apiFetch } from '@/lib/apiFetch';
+import { apiGet, apiPost } from '@/lib/apiFetch';
 import { useBand } from '@/context/BandContext';
 import { Button } from '@/components/ui/button';
 import {
@@ -28,7 +28,7 @@ export const PendingApprovalNotifier = () => {
   const fetchPending = async () => {
     if (!activeBandId || !isManager) return;
     try {
-      const data = await apiFetch<PendingMember[]>('GET', `/api/bands/${activeBandId}/members/pending`);
+      const data = await apiGet<PendingMember[]>(`/api/bands/${activeBandId}/members/pending`);
       setPendingList(data ?? []);
     } catch {
       // Silent fail
@@ -44,7 +44,7 @@ export const PendingApprovalNotifier = () => {
 
   const handleAction = async (action: 'approve' | 'deny', membershipId: string) => {
     try {
-      await apiFetch('POST', `/api/bands/${activeBandId}/members/${membershipId}/${action}`);
+      await apiPost(`/api/bands/${activeBandId}/members/${membershipId}/${action}`);
       toast.success(action === 'approve' ? 'Member approved' : 'Request denied');
       setPendingList(prev => prev.filter(m => m.id !== membershipId));
     } catch (e: any) {

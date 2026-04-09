@@ -23,6 +23,7 @@ import { useSyncedSongs } from "@/hooks/useSyncedData";
 import { useNetworkStatus } from "@/hooks/useNetworkStatus";
 import { LoadingDialog } from "@/components/LoadingDialog";
 import { AlbumArtwork } from "@/components/AlbumArtwork";
+import { useBand } from "@/context/BandContext";
 
 const SongListItem = ({ song, onDeleteRequest, isOnline }: { song: Song; onDeleteRequest: (song: Song) => void; isOnline: boolean }) => {
   const navigate = useNavigate();
@@ -128,12 +129,13 @@ const SongList = () => {
 
   const queryClient = useQueryClient();
   const isOnline = useNetworkStatus();
+  const { activeBandId } = useBand();
 
   // Use the Synced Hook (Master Catalog)
   const { data: songs = [], isLoading } = useSyncedSongs();
 
   const deleteMutation = useMutation({
-    mutationFn: deleteSong,
+    mutationFn: (id: string) => deleteSong(activeBandId!, id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['songs'] });
       setSongToDelete(null);
@@ -147,7 +149,7 @@ const SongList = () => {
     mutationFn: async (songId: string) => {
         const songToRetire = songs.find(s => s.id === songId);
         if(!songToRetire) return;
-        return saveSong({ ...songToRetire, is_retired: true });
+        return saveSong(activeBandId!, { ...songToRetire, is_retired: true });
     },
     onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: ['songs'] });
@@ -196,7 +198,7 @@ const SongList = () => {
     setUsageData([]);
     
     try {
-        const usage = await getSongUsage(song.id);
+        const usage = await getSongUsage(activeBandId!, song.id);
         setUsageData(usage);
     } catch (error) {
         console.error("Failed to check song usage", error);

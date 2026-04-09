@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
-import { apiFetch } from '@/lib/apiFetch';
+import { apiPatch } from '@/lib/apiFetch';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -48,7 +48,7 @@ const OnboardingWizard = () => {
     }
     setLoading(true);
     try {
-      await apiFetch('PATCH', '/api/users/me', { first_name: firstName.trim(), last_name: lastName.trim() });
+      await apiPatch('/api/users/me', { first_name: firstName.trim(), last_name: lastName.trim() });
       await refreshProfile();
       navigate('/');
     } catch (err: any) {

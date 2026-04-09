@@ -8,7 +8,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle
 } from '@/components/ui/alert-dialog';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { apiFetch } from '@/lib/apiFetch';
+import { apiPatch, apiDel } from '@/lib/apiFetch';
 import { authClient } from '@/lib/authClient';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
@@ -54,7 +54,7 @@ const Profile = () => {
     e.preventDefault();
     setSaving(true);
     try {
-      await apiFetch('PATCH', '/api/users/me', {
+      await apiPatch('/api/users/me', {
         first_name: firstName.trim(),
         last_name:  lastName.trim(),
       });
@@ -94,7 +94,7 @@ const Profile = () => {
     setIsDeleteOpen(false);
     setSaving(true);
     try {
-      await apiFetch('DELETE', '/api/users/me');
+      await apiDel('/api/users/me');
       toast.success('Account deactivated.');
       await signOut();
       navigate('/login');

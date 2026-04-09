@@ -5,7 +5,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
-import { apiFetch } from '@/lib/apiFetch';
+import { apiGet, apiPatch } from '@/lib/apiFetch';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Loader2, RefreshCw } from 'lucide-react';
@@ -44,7 +44,7 @@ const AdminUsers = () => {
   const fetchUsers = async () => {
     setLoading(true);
     try {
-      const data = await apiFetch<AdminUser[]>('GET', '/api/users');
+      const data = await apiGet<AdminUser[]>('/api/users');
       setUsers(data ?? []);
     } catch (err: any) {
       toast.error('Failed to load users: ' + (err?.message ?? 'Unknown error'));
@@ -58,7 +58,7 @@ const AdminUsers = () => {
   const handleUpdateRole = async (userId: string, role: PlatformRole) => {
     setUsers(prev => prev.map(u => u.id === userId ? { ...u, platformRole: role } : u));
     try {
-      await apiFetch('PATCH', `/api/users/${userId}`, { platform_role: role });
+      await apiPatch(`/api/users/${userId}`, { platform_role: role });
       toast.success('Role updated');
     } catch (err: any) {
       toast.error('Update failed: ' + (err?.message ?? 'Unknown'));
@@ -69,7 +69,7 @@ const AdminUsers = () => {
   const handleToggleActive = async (userId: string, isActive: boolean) => {
     setUsers(prev => prev.map(u => u.id === userId ? { ...u, isActive } : u));
     try {
-      await apiFetch('PATCH', `/api/users/${userId}`, { is_active: isActive });
+      await apiPatch(`/api/users/${userId}`, { is_active: isActive });
       toast.success(isActive ? 'User activated' : 'User deactivated');
     } catch (err: any) {
       toast.error('Update failed: ' + (err?.message ?? 'Unknown'));

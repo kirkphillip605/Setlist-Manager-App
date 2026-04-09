@@ -5,7 +5,7 @@ import { useBand } from '@/context/BandContext';
 import { getGigSession, sendHeartbeat } from '@/lib/api';
 import { wsClient } from '@/lib/wsClient';
 import { toast } from 'sonner';
-import { apiFetch } from '@/lib/apiFetch';
+import { apiGet } from '@/lib/apiFetch';
 
 export const useGigSession = (gigId: string | null) => {
   const { user }         = useAuth();
@@ -39,7 +39,7 @@ export const useGigSession = (gigId: string | null) => {
         sessionDataRef.current = session;
 
         if (session?.id) {
-          const parts = await apiFetch<GigSessionParticipant[]>(
+          const parts = await apiGet<GigSessionParticipant[]>(
             `/api/bands/${activeBandId}/gig-sessions/${session.id}/participants`
           );
           if (mounted && parts) {
@@ -90,7 +90,7 @@ export const useGigSession = (gigId: string | null) => {
       const sid = sessionDataRef.current?.id;
       if (!sid || !activeBandId) return;
       try {
-        const parts = await apiFetch<GigSessionParticipant[]>(
+        const parts = await apiGet<GigSessionParticipant[]>(
           `/api/bands/${activeBandId}/gig-sessions/${sid}/participants`
         );
         if (!parts) return;

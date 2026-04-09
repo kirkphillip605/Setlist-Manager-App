@@ -1,6 +1,7 @@
 import AppLayout from "@/components/AppLayout";
 import { Loader2, CloudOff, Save, Undo, Plus, Star, Clock, Trash2, Lock } from "lucide-react";
 import { syncSetlist } from "@/lib/api";
+import { useBand } from "@/context/BandContext";
 import { parseDurationToSeconds, formatDurationRounded } from "@/lib/utils";
 import { useState, useEffect, useCallback } from "react";
 import { useParams } from "react-router-dom";
@@ -28,6 +29,7 @@ const SetlistDetail = () => {
   const queryClient = useQueryClient();
   const isOnline = useNetworkStatus();
   const { canEditSetlist } = useAuth();
+  const { activeBandId } = useBand();
   
   // -- Data Fetching --
   const fetchedSetlist = useSetlistWithSongs(id);
@@ -339,7 +341,7 @@ const SetlistDetail = () => {
   const saveMutation = useMutation({
       mutationFn: async () => {
           if (!localSetlist) return;
-          await syncSetlist(localSetlist);
+          await syncSetlist(activeBandId!, localSetlist);
       },
       onSuccess: () => {
           queryClient.invalidateQueries({ queryKey: ['setlist', id] });

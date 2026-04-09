@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { SongFormFields } from "@/components/SongFormFields";
 import { saveSong } from "@/lib/api";
+import { useBand } from "@/context/BandContext";
 import { searchMusic, fetchLyrics, fetchAudioFeatures, MusicResult } from "@/lib/musicApi";
 import { Song } from "@/types";
 import { useEffect, useState } from "react";
@@ -22,6 +23,7 @@ const SongEdit = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const isOnline = useNetworkStatus();
+  const { activeBandId } = useBand();
   
   // Logic: If no ID, we are adding. If ID, we are editing.
   // If Adding and Offline -> Block (Can't search spotify, can't sync).
@@ -56,7 +58,7 @@ const SongEdit = () => {
   }, [song, reset]);
 
   const saveMutation = useMutation({
-    mutationFn: saveSong,
+    mutationFn: (song: Partial<Song>) => saveSong(activeBandId!, song),
     onSuccess: () => {
       toast.success(id ? "Song updated!" : "Song added!");
       queryClient.invalidateQueries({ queryKey: ['songs'] });

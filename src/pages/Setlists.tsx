@@ -30,12 +30,14 @@ import { useSyncedSetlists } from "@/hooks/useSyncedData";
 import { useNetworkStatus } from "@/hooks/useNetworkStatus";
 import { LoadingDialog } from "@/components/LoadingDialog";
 import { useAuth } from "@/context/AuthContext";
+import { useBand } from "@/context/BandContext";
 import { SetlistPrintDialog } from "@/components/SetlistPrintDialog";
 
 const Setlists = () => {
   const navigate = useNavigate();
   const isOnline = useNetworkStatus();
   const { canEditSetlist } = useAuth();
+  const { activeBandId } = useBand();
   const [activeTab, setActiveTab] = useState("public");
   const [sortBy, setSortBy] = useState<"name" | "created" | "updated">("name");
   
@@ -83,9 +85,9 @@ const Setlists = () => {
       const isPersonal = createMode === "personal" || (createMode === "clone" && cloneType === "personal");
       
       if (createMode === "clone") {
-         return cloneSetlist(sourceSetlistId, newListName, isPersonal);
+         return cloneSetlist(activeBandId!, sourceSetlistId, newListName, isPersonal);
       } else {
-         return createSetlist(newListName, isPersonal, isDefault);
+         return createSetlist(activeBandId!, newListName, isPersonal, isDefault);
       }
     },
     onSuccess: (data) => {
@@ -96,7 +98,7 @@ const Setlists = () => {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: deleteSetlist,
+    mutationFn: (id: string) => deleteSetlist(activeBandId!, id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['setlists'] });
       setDeleteId(null);
@@ -106,7 +108,7 @@ const Setlists = () => {
   });
 
   const convertMutation = useMutation({
-      mutationFn: convertSetlistToBand,
+      mutationFn: (id: string) => convertSetlistToBand(activeBandId!, id),
       onSuccess: () => {
           queryClient.invalidateQueries({ queryKey: ['setlists'] });
           setConvertId(null);
@@ -143,7 +145,7 @@ const Setlists = () => {
       setDeleteId(id);
       setIsCheckingUsage(true);
       try {
-          const usage = await getSetlistUsage(id);
+          const usage = await getSetlistUsage(activeBandId!, id);
           setUsageData(usage);
       } catch (e) {
           console.error(e);

@@ -29,7 +29,7 @@ import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { useImmersiveMode } from "@/context/ImmersiveModeContext";
 import { Capacitor } from "@capacitor/core";
-import { apiFetch } from "@/lib/apiFetch";
+import { apiPatch } from "@/lib/apiFetch";
 import { UserPreferences } from "@/types";
 import { useMetronome } from "@/components/MetronomeContext";
 
@@ -103,7 +103,7 @@ export const MainMenu = ({ open: controlledOpen, onOpenChange: setControlledOpen
       const newPrefs = { ...prefs, [key]: value };
       setPrefs(newPrefs); // Optimistic update
       try {
-          await apiFetch('PATCH', '/api/users/me', { preferences: newPrefs });
+          await apiPatch('/api/users/me', { preferences: newPrefs });
           refreshProfile();
       } catch (e) {
           console.error('Failed to save preference', e);

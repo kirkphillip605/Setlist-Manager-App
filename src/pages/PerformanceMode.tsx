@@ -31,10 +31,11 @@ import { useSetlistWithSongs, useSyncedSongs, useSyncedSkippedSongs } from "@/ho
 import { useNetworkStatus } from "@/hooks/useNetworkStatus";
 import { useGigSession } from "@/hooks/useGigSession";
 import { wsClient } from "@/lib/wsClient";
-import { apiFetch } from "@/lib/apiFetch";
+import { apiGet } from "@/lib/apiFetch";
 import { Badge } from "@/components/ui/badge";
 import { TempoBlinker } from "@/components/TempoBlinker";
 import { useAuth } from "@/context/AuthContext";
+import { useBand } from "@/context/BandContext";
 import { useGesture } from "@use-gesture/react";
 import { KeepAwake } from "@capacitor-community/keep-awake";
 import { Haptics, NotificationType } from '@capacitor/haptics';
@@ -47,6 +48,7 @@ const PerformanceMode = () => {
   const initialStandalone = searchParams.get('standalone') === 'true';
   const isOnline = useNetworkStatus();
   const { profile } = useAuth();
+  const { activeBandId } = useBand();
 
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -219,7 +221,7 @@ const PerformanceMode = () => {
       const checkRecovery = async () => {
           if (isOnline && isForcedStandalone && previousSessionId && gigId) {
               try {
-                  const session = await getGigSession(gigId);
+                  const session = await getGigSession(activeBandId!, gigId);
                   
                   if (!session || !session.is_active) {
                       setPreviousSessionId(null); 
@@ -243,17 +245,17 @@ const PerformanceMode = () => {
       if (!recoveryData) return;
 
       if (recoveryData.type === 'leader') {
-          await updateSessionState(recoveryData.session.id, {
+          await updateSessionState(activeBandId!, recoveryData.session.id, {
               current_set_index: currentSetIndex,
               current_song_index: currentSongIndex,
               adhoc_song_id: tempSong?.id || null
           });
-          await forceLeadership(recoveryData.session.id, userId!);
+          await forceLeadership(activeBandId!, recoveryData.session.id, userId!);
           
           setIsForcedStandalone(false);
           toast.success("Resumed Gig Session");
       } else {
-          await joinGigSession(recoveryData.session.id, userId!);
+          await joinGigSession(activeBandId!, recoveryData.session.id);
           setIsForcedStandalone(false);
           toast.success("Rejoined Session as Follower");
       }
@@ -264,10 +266,10 @@ const PerformanceMode = () => {
       if (!recoveryData) return;
 
       if (recoveryData.type === 'leader') {
-          await endGigSession(recoveryData.session.id);
+          await endGigSession(activeBandId!, recoveryData.session.id);
           toast.info("Gig Session Ended. Remaining in Standalone.");
       } else {
-          await leaveGigSession(recoveryData.session.id, userId!);
+          await leaveGigSession(activeBandId!, recoveryData.session.id);
           toast.info("Left Session. Remaining in Standalone.");
       }
       
@@ -314,7 +316,7 @@ const PerformanceMode = () => {
 
   const broadcastState = async (setIdx: number, songIdx: number, adhocId: string | null) => {
       if (isGigMode && isLeader && sessionData) {
-          await updateSessionState(sessionData.id, {
+          await updateSessionState(activeBandId!, sessionData.id, {
               current_set_index: setIdx,
               current_song_index: songIdx,
               adhoc_song_id: adhocId
@@ -337,7 +339,7 @@ const PerformanceMode = () => {
           }
       }
 
-      await updateSessionState(sessionData.id, updates);
+      await updateSessionState(activeBandId!, sessionData.id, updates);
       setIsBreakDialogOpen(false);
       setShowSetTransition(false); 
       setMenuOpen(false);
@@ -346,7 +348,7 @@ const PerformanceMode = () => {
 
   const handleResumeBreak = async () => {
       if (!isGigMode || !isLeader || !sessionData) return;
-      await updateSessionState(sessionData.id, { is_on_break: false });
+      await updateSessionState(activeBandId!, sessionData.id, { is_on_break: false });
       toast.success("Break ended. Session resumed.");
   };
 
@@ -481,14 +483,14 @@ const PerformanceMode = () => {
 
   const handleSkipSong = async () => {
       if (!gigId || !activeSong || !isLeader) return;
-      await addSkippedSong(gigId, activeSong.id);
+      await addSkippedSong(activeBandId!, gigId, activeSong.id);
       toast.info("Song skipped");
       handleNext();
   };
 
   const handleRestoreSkippedSong = async (song: Song) => {
       if (!gigId || !canNavigate) return;
-      await removeSkippedSong(gigId, song.id);
+      await removeSkippedSong(activeBandId!, gigId, song.id);
       handleAdHocSelect(song);
       setShowSkippedSongs(false);
       toast.success("Playing skipped song");
@@ -531,8 +533,7 @@ const PerformanceMode = () => {
               msg.data?.status === 'pending'
           ) {
               try {
-                  const requester = await apiFetch<{ first_name: string; last_name: string }>(
-                      'GET',
+                  const requester = await apiGet<{ first_name: string; last_name: string }>(
                       `/api/users/${msg.data.requester_id}/public`
                   );
                   setIncomingRequest({
@@ -544,7 +545,7 @@ const PerformanceMode = () => {
               }
           }
       });
-      return unsub;
+      return () => { unsub(); };
   }, [isLeader, sessionData]);
 
   const [sessionEndedInfo, setSessionEndedInfo] = useState<{ endedBy: string, at: string } | null>(null);
@@ -572,12 +573,12 @@ const PerformanceMode = () => {
       const diff = (now - lastBeat) / 1000;
 
       if (diff > 30 || isOrphaned) {
-          await forceLeadership(sessionData.id, userId);
+          await forceLeadership(activeBandId!, sessionData.id, userId);
           toast.success("You are now the leader.");
           setShowLeaderRequest(false);
           setIsOrphaned(false);
       } else {
-          await requestLeadership(sessionData.id, userId);
+          await requestLeadership(activeBandId!, sessionData.id);
           toast.info("Request sent to current leader.");
           setShowLeaderRequest(false);
       }
@@ -585,9 +586,9 @@ const PerformanceMode = () => {
 
   const handleResolveRequest = async (approved: boolean) => {
       if (!incomingRequest) return;
-      await resolveLeadershipRequest(incomingRequest.id, approved ? 'approved' : 'denied');
+      await resolveLeadershipRequest(activeBandId!, incomingRequest.id, approved ? 'approved' : 'denied');
       if (approved && userId) {
-          await forceLeadership(sessionData!.id, incomingRequest.requester_id);
+          await forceLeadership(activeBandId!, sessionData!.id, incomingRequest.requester_id);
           toast.success("Leadership transferred.");
       }
       setIncomingRequest(null);
@@ -595,21 +596,21 @@ const PerformanceMode = () => {
 
   const handleTransferAndLeave = async (newLeaderId: string) => {
       if (!sessionData) return;
-      await forceLeadership(sessionData.id, newLeaderId);
-      if (userId) await leaveGigSession(sessionData.id, userId);
+      await forceLeadership(activeBandId!, sessionData.id, newLeaderId);
+      await leaveGigSession(activeBandId!, sessionData.id);
       navigate('/gigs');
   };
 
   const handleEndSession = async () => {
       if (!sessionData) return;
-      await endGigSession(sessionData.id);
+      await endGigSession(activeBandId!, sessionData.id);
       navigate('/gigs');
   };
 
   const handleFollowerExit = async () => {
-      if (sessionData && userId) {
+      if (sessionData) {
           try {
-              await leaveGigSession(sessionData.id, userId);
+              await leaveGigSession(activeBandId!, sessionData.id);
           } catch (e) {
               console.error("Failed to leave session cleanly", e);
           }
@@ -1161,7 +1162,7 @@ const PerformanceMode = () => {
                           <Crown className="mr-2 h-4 w-4" /> Become Leader
                       </Button>
                       <Button variant="destructive" className="flex-1" onClick={() => {
-                          if(sessionData) endGigSession(sessionData.id);
+                          if(sessionData) endGigSession(activeBandId!, sessionData.id);
                       }}>
                           End Session
                       </Button>

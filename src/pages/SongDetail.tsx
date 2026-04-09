@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useMetronome } from "@/components/MetronomeContext";
 import { useAuth } from "@/context/AuthContext";
+import { useBand } from "@/context/BandContext";
 import { useEffect, useState, useRef } from "react";
 import { searchMusic, fetchAudioFeatures } from "@/lib/musicApi";
 import { motion } from "framer-motion";
@@ -59,6 +60,7 @@ const SongDetail = () => {
   const { openMetronome, closeMetronome, isPlaying, bpm, isOpen } = useMetronome();
   
   const { isAdmin } = useAuth();
+  const { activeBandId } = useBand();
   const [isFetchingDetails, setIsFetchingDetails] = useState(false);
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -102,7 +104,7 @@ const SongDetail = () => {
   }, [isOpen, bpm, song, isOnline]);
 
   const deleteMutation = useMutation({
-    mutationFn: deleteSong,
+    mutationFn: (id: string) => deleteSong(activeBandId!, id),
     onSuccess: () => {
       toast.success("Song deleted");
       queryClient.invalidateQueries({ queryKey: ['songs'] });
@@ -114,9 +116,9 @@ const SongDetail = () => {
   });
 
   const updateSongMutation = useMutation({
-    mutationFn: saveSong,
+    mutationFn: (song: Partial<import('@/types').Song>) => saveSong(activeBandId!, song),
     onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: ['songs'] }); // Refresh list view
+        queryClient.invalidateQueries({ queryKey: ['songs'] });
         toast.success("Song updated");
         setIsSearchOpen(false);
         setShowBpmDialog(false);
@@ -128,7 +130,7 @@ const SongDetail = () => {
     setIsCheckingUsage(true);
     setShowDeleteDialog(true);
     try {
-        const usage = await getSongUsage(id);
+        const usage = await getSongUsage(activeBandId!, id!);
         setUsageData(usage);
     } catch (error) {
         console.error("Failed to check usage", error);

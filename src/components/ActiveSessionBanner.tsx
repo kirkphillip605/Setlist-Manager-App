@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { apiFetch } from '@/lib/apiFetch';
+import { apiGet } from '@/lib/apiFetch';
 import { useAuth } from '@/context/AuthContext';
 import { useBand } from '@/context/BandContext';
 import { Button } from '@/components/ui/button';
@@ -25,7 +25,7 @@ export const ActiveSessionBanner = () => {
   const checkParticipation = async () => {
     if (!user?.id || !activeBandId) return;
     try {
-      const data = await apiFetch<ActiveSessionInfo | null>('GET', `/api/bands/${activeBandId}/gig-sessions/active`);
+      const data = await apiGet<ActiveSessionInfo | null>(`/api/bands/${activeBandId}/gig-sessions/active`);
       setActiveSession(data ?? null);
     } catch {
       // Silent fail — just don't show banner
@@ -41,7 +41,7 @@ export const ActiveSessionBanner = () => {
         void checkParticipation();
       }
     });
-    return unsub;
+    return () => { unsub(); };
   }, [user?.id, activeBandId]);
 
   const isInPerformance =

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { apiFetch } from '@/lib/apiFetch';
+import { apiPost } from '@/lib/apiFetch';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Loader2, UserX, LogOut, RefreshCw } from 'lucide-react';
@@ -16,7 +16,7 @@ const ReactivateAccount = () => {
     if (!user) return;
     setLoading(true);
     try {
-      await apiFetch('POST', '/api/users/me/reactivate');
+      await apiPost('/api/users/me/reactivate');
       toast.success('Account reactivated! Welcome back.');
       await refreshProfile();
       navigate('/');
