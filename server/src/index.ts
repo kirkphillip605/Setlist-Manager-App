@@ -38,7 +38,7 @@ app.use('*', cors({
     'capacitor://localhost',
     'https://localhost',
   ],
-  allowHeaders:  ['Content-Type', 'Authorization', 'Cookie'],
+  allowHeaders:  ['Content-Type', 'Authorization', 'Cookie', 'sentry-trace', 'baggage'],
   allowMethods:  ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   exposeHeaders: ['Set-Cookie'],
   credentials:   true,
