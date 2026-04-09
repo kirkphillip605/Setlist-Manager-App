@@ -7,20 +7,29 @@ const { Pool, Client } = pg;
 const DATABASE_URL = process.env.DATABASE_URL;
 if (!DATABASE_URL) throw new Error('DATABASE_URL environment variable is required');
 
-function parseConnectionConfig(url: string): pg.ConnectionConfig {
-  const match = url.match(
-    /^postgresql:\/\/([^:]+):(.+)@([^:]+):(\d+)\/(.+)$/
-  );
-  if (!match) {
-    return { connectionString: url };
+function buildSafeConnectionString(raw: string): string {
+  try {
+    const parsed = new URL(raw);
+    return raw;
+  } catch {
+    const match = raw.match(
+      /^(postgresql|postgres):\/\/([^:]*):(.*)@(\[[^\]]+\]|[^:]+):(\d+)\/(.+)$/
+    );
+    if (!match) {
+      throw new Error(
+        '[DB] DATABASE_URL is not a valid PostgreSQL connection string'
+      );
+    }
+    const [, protocol, user, password, host, port, dbAndParams] = match;
+    const encodedUser = encodeURIComponent(user);
+    const encodedPassword = encodeURIComponent(password);
+    return `${protocol}://${encodedUser}:${encodedPassword}@${host}:${port}/${dbAndParams}`;
   }
-  const [, user, password, host, port, database] = match;
-  return { user, password, host, port: parseInt(port, 10), database };
 }
 
-const connConfig = parseConnectionConfig(DATABASE_URL);
+const safeConnectionString = buildSafeConnectionString(DATABASE_URL);
 
-export const pool = new Pool({ ...connConfig, max: 10 });
+export const pool = new Pool({ connectionString: safeConnectionString, max: 10 });
 
 export const db = drizzle(pool, { schema });
 
@@ -29,7 +38,7 @@ let listenClient: InstanceType<typeof Client> | null = null;
 export async function getListenClient(): Promise<InstanceType<typeof Client>> {
   if (listenClient) return listenClient;
 
-  listenClient = new Client(connConfig);
+  listenClient = new Client({ connectionString: safeConnectionString });
   await listenClient.connect();
 
   listenClient.on('error', (err) => {
