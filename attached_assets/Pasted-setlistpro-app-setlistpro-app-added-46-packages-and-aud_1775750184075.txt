@@ -1,0 +1,174 @@
+setlistpro-app  | 
+setlistpro-app  | added 46 packages, and audited 47 packages in 2s
+setlistpro-app  | 
+setlistpro-app  | 6 packages are looking for funding
+setlistpro-app  |   run `npm fund` for details
+setlistpro-app  | 
+setlistpro-app  | 1 high severity vulnerability
+setlistpro-app  | 
+setlistpro-app  | To address all issues (including breaking changes), run:
+setlistpro-app  |   npm audit fix --force
+setlistpro-app  | 
+setlistpro-app  | Run `npm audit` for details.
+setlistpro-app  | npm notice
+setlistpro-app  | npm notice New major version of npm available! 10.8.2 -> 11.12.1
+setlistpro-app  | npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.12.1
+setlistpro-app  | npm notice To update run: npm install -g npm@11.12.1
+setlistpro-app  | npm notice
+setlistpro-app  | sh: node_modules/.bin/tsx: not found
+setlistpro-app  | 
+setlistpro-app  | up to date, audited 47 packages in 585ms
+setlistpro-app  | 
+setlistpro-app  | 6 packages are looking for funding
+setlistpro-app  |   run `npm fund` for details
+setlistpro-app  | 
+setlistpro-app  | 1 high severity vulnerability
+setlistpro-app  | 
+setlistpro-app  | To address all issues (including breaking changes), run:
+setlistpro-app  |   npm audit fix --force
+setlistpro-app  | 
+setlistpro-app  | Run `npm audit` for details.
+setlistpro-app  | sh: node_modules/.bin/tsx: not found
+setlistpro-app  | 
+setlistpro-app  | up to date, audited 47 packages in 723ms
+setlistpro-app  | 
+setlistpro-app  | 6 packages are looking for funding
+setlistpro-app  |   run `npm fund` for details
+setlistpro-app  | 
+setlistpro-app  | 1 high severity vulnerability
+setlistpro-app  | 
+setlistpro-app  | To address all issues (including breaking changes), run:
+setlistpro-app  |   npm audit fix --force
+setlistpro-app  | 
+setlistpro-app  | Run `npm audit` for details.
+setlistpro-app  | sh: node_modules/.bin/tsx: not found
+setlistpro-app  | 
+setlistpro-app  | up to date, audited 47 packages in 615ms
+setlistpro-app  | 
+setlistpro-app  | 6 packages are looking for funding
+setlistpro-app  |   run `npm fund` for details
+setlistpro-app  | 
+setlistpro-app  | 1 high severity vulnerability
+setlistpro-app  | 
+setlistpro-app  | To address all issues (including breaking changes), run:
+setlistpro-app  |   npm audit fix --force
+setlistpro-app  | 
+setlistpro-app  | Run `npm audit` for details.
+setlistpro-app  | sh: node_modules/.bin/tsx: not found
+setlistpro-app  | 
+setlistpro-app  | up to date, audited 47 packages in 631ms
+setlistpro-app  | 
+setlistpro-app  | 6 packages are looking for funding
+setlistpro-app  |   run `npm fund` for details
+setlistpro-app  | 
+setlistpro-app  | 1 high severity vulnerability
+setlistpro-app  | 
+setlistpro-app  | To address all issues (including breaking changes), run:
+setlistpro-app  |   npm audit fix --force
+setlistpro-app  | 
+setlistpro-app  | Run `npm audit` for details.
+setlistpro-app  | sh: node_modules/.bin/tsx: not found
+setlistpro-app  | 
+setlistpro-app  | up to date, audited 47 packages in 656ms
+setlistpro-app  | 
+setlistpro-app  | 6 packages are looking for funding
+setlistpro-app  |   run `npm fund` for details
+setlistpro-app  | 
+setlistpro-app  | 1 high severity vulnerability
+setlistpro-app  | 
+setlistpro-app  | To address all issues (including breaking changes), run:
+setlistpro-app  |   npm audit fix --force
+setlistpro-app  | 
+setlistpro-app  | Run `npm audit` for details.
+setlistpro-app  | sh: node_modules/.bin/tsx: not found
+setlistpro-app  | 
+setlistpro-app  | up to date, audited 47 packages in 610ms
+setlistpro-app  | 
+setlistpro-app  | 6 packages are looking for funding
+setlistpro-app  |   run `npm fund` for details
+setlistpro-app  | 
+setlistpro-app  | 1 high severity vulnerability
+setlistpro-app  | 
+setlistpro-app  | To address all issues (including breaking changes), run:
+setlistpro-app  |   npm audit fix --force
+setlistpro-app  | 
+setlistpro-app  | Run `npm audit` for details.
+setlistpro-app  | sh: node_modules/.bin/tsx: not found
+setlistpro-app  | 
+setlistpro-app  | up to date, audited 47 packages in 613ms
+setlistpro-app  | 
+setlistpro-app  | 6 packages are looking for funding
+setlistpro-app  |   run `npm fund` for details
+setlistpro-app  | 
+setlistpro-app  | 1 high severity vulnerability
+setlistpro-app  | 
+setlistpro-app  | To address all issues (including breaking changes), run:
+setlistpro-app  |   npm audit fix --force
+setlistpro-app  | 
+setlistpro-app  | Run `npm audit` for details.
+setlistpro-app  | sh: node_modules/.bin/tsx: not found
+setlistpro-app  | 
+setlistpro-app  | up to date, audited 47 packages in 671ms
+setlistpro-app  | 
+setlistpro-app  | 6 packages are looking for funding
+setlistpro-app  |   run `npm fund` for details
+setlistpro-app  | 
+setlistpro-app  | 1 high severity vulnerability
+setlistpro-app  | 
+setlistpro-app  | To address all issues (including breaking changes), run:
+setlistpro-app  |   npm audit fix --force
+setlistpro-app  | 
+setlistpro-app  | Run `npm audit` for details.
+setlistpro-app  | sh: node_modules/.bin/tsx: not found
+setlistpro-app  | 
+setlistpro-app  | up to date, audited 47 packages in 639ms
+setlistpro-app  | 
+setlistpro-app  | 6 packages are looking for funding
+setlistpro-app  |   run `npm fund` for details
+setlistpro-app  | 
+setlistpro-app  | 1 high severity vulnerability
+setlistpro-app  | 
+setlistpro-app  | To address all issues (including breaking changes), run:
+setlistpro-app  |   npm audit fix --force
+setlistpro-app  | 
+setlistpro-app  | Run `npm audit` for details.
+setlistpro-app  | sh: node_modules/.bin/tsx: not found
+setlistpro-app  | 
+setlistpro-app  | up to date, audited 47 packages in 594ms
+setlistpro-app  | 
+setlistpro-app  | 6 packages are looking for funding
+setlistpro-app  |   run `npm fund` for details
+setlistpro-app  | 
+setlistpro-app  | 1 high severity vulnerability
+setlistpro-app  | 
+setlistpro-app  | To address all issues (including breaking changes), run:
+setlistpro-app  |   npm audit fix --force
+setlistpro-app  | 
+setlistpro-app  | Run `npm audit` for details.
+setlistpro-app  | sh: node_modules/.bin/tsx: not found
+setlistpro-app  | 
+setlistpro-app  | up to date, audited 47 packages in 587ms
+setlistpro-app  | 
+setlistpro-app  | 6 packages are looking for funding
+setlistpro-app  |   run `npm fund` for details
+setlistpro-app  | 
+setlistpro-app  | 1 high severity vulnerability
+setlistpro-app  | 
+setlistpro-app  | To address all issues (including breaking changes), run:
+setlistpro-app  |   npm audit fix --force
+setlistpro-app  | 
+setlistpro-app  | Run `npm audit` for details.
+setlistpro-app  | sh: node_modules/.bin/tsx: not found
+setlistpro-app  | 
+setlistpro-app  | up to date, audited 47 packages in 667ms
+setlistpro-app  | 
+setlistpro-app  | 6 packages are looking for funding
+setlistpro-app  |   run `npm fund` for details
+setlistpro-app  | 
+setlistpro-app  | 1 high severity vulnerability
+setlistpro-app  | 
+setlistpro-app  | To address all issues (including breaking changes), run:
+setlistpro-app  |   npm audit fix --force
+setlistpro-app  | 
+setlistpro-app  | Run `npm audit` for details.
+setlistpro-app  | sh: node_modules/.bin/tsx: not found

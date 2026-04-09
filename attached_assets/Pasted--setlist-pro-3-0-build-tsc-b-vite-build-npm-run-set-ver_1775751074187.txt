@@ -1,0 +1,533 @@
+> setlist-pro@3.0 build
+> tsc -b && vite build && npm run set-version
+
+src/components/ActiveSessionBanner.tsx:28:68 - error TS2559: Type 'string' has no properties in common with type 'RequestInit'.
+
+28       const data = await apiFetch<ActiveSessionInfo | null>('GET', `/api/bands/${activeBandId}/gig-sessions/active`);
+                                                                      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+src/components/ActiveSessionBanner.tsx:36:13 - error TS2345: Argument of type '() => () => boolean' is not assignable to parameter of type 'EffectCallback'.
+  Type '() => boolean' is not assignable to type 'void | Destructor'.
+    Type '() => boolean' is not assignable to type 'Destructor'.
+      Type 'boolean' is not assignable to type 'void | { [UNDEFINED_VOID_ONLY]: never; }'.
+
+36   useEffect(() => {
+               ~~~~~~~
+
+src/components/GigCreateWizard.tsx:136:9 - error TS2322: Type '(bandId: string, gig: Partial<Gig>) => Promise<Gig>' is not assignable to type 'MutationFunction<Gig, string>'.
+  Types of parameters 'gig' and 'context' are incompatible.
+    Type 'MutationFunctionContext' has no properties in common with type 'Partial<Gig>'.
+
+136         mutationFn: saveGig,
+            ~~~~~~~~~~
+
+  node_modules/@tanstack/query-core/build/modern/hydration-DksKBgQq.d.ts:1198:5
+    1198     mutationFn?: MutationFunction<TData, TVariables>;
+             ~~~~~~~~~~
+    The expected type comes from property 'mutationFn' which is declared here on type 'UseMutationOptions<Gig, any, string, unknown>'
+
+src/components/GigCreateWizard.tsx:446:68 - error TS2345: Argument of type 'Gig' is not assignable to parameter of type 'string'.
+
+446                                 onClick={() => saveMutation.mutate(formData as Gig)}
+                                                                       ~~~~~~~~~~~~~~~
+
+src/components/MainMenu.tsx:106:52 - error TS2554: Expected 1-2 arguments, but got 3.
+
+106           await apiFetch('PATCH', '/api/users/me', { preferences: newPrefs });
+                                                       ~~~~~~~~~~~~~~~~~~~~~~~~~
+
+src/components/PendingApprovalNotifier.tsx:31:59 - error TS2559: Type 'string' has no properties in common with type 'RequestInit'.
+
+31       const data = await apiFetch<PendingMember[]>('GET', `/api/bands/${activeBandId}/members/pending`);
+                                                             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+src/components/PendingApprovalNotifier.tsx:47:30 - error TS2559: Type 'string' has no properties in common with type 'RequestInit'.
+
+47       await apiFetch('POST', `/api/bands/${activeBandId}/members/${membershipId}/${action}`);
+                                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+src/components/PerformanceSessionDialog.tsx:51:21 - error TS2339: Property 'participant_ids' does not exist on type 'GigSession'.
+
+51         if (session.participant_ids?.includes(user.id)) {
+                       ~~~~~~~~~~~~~~~
+
+src/components/PerformanceSessionDialog.tsx:61:31 - error TS2339: Property 'leader_name' does not exist on type 'GigSession'.
+
+61         setLeaderName(session.leader_name ?? 'Leader');
+                                 ~~~~~~~~~~~
+
+src/pages/AdminSessions.tsx:26:32 - error TS2554: Expected 1 arguments, but got 0.
+
+26             const data = await getAllGigSessions();
+                                  ~~~~~~~~~~~~~~~~~
+
+  src/lib/api.ts:108:35
+    108 export const getAllGigSessions = (bandId: string) =>
+                                          ~~~~~~~~~~~~~~
+    An argument for 'bandId' was not provided.
+
+src/pages/AdminSessions.tsx:42:19 - error TS2554: Expected 2 arguments, but got 1.
+
+42             await endGigSession(id);
+                     ~~~~~~~~~~~~~
+
+  src/lib/api.ts:114:47
+    114 export const endGigSession = (bandId: string, sessionId: string) =>
+                                                      ~~~~~~~~~~~~~~~~~
+    An argument for 'sessionId' was not provided.
+
+src/pages/AdminSessions.tsx:52:19 - error TS2554: Expected 1 arguments, but got 0.
+
+52             await endAllSessions();
+                     ~~~~~~~~~~~~~~
+
+  src/lib/api.ts:117:32
+    117 export const endAllSessions = (bandId: string) =>
+                                       ~~~~~~~~~~~~~~
+    An argument for 'bandId' was not provided.
+
+src/pages/AdminSessions.tsx:63:19 - error TS2554: Expected 1 arguments, but got 0.
+
+63             await cleanupStaleSessions();
+                     ~~~~~~~~~~~~~~~~~~~~
+
+  src/lib/api.ts:120:38
+    120 export const cleanupStaleSessions = (bandId: string) =>
+                                             ~~~~~~~~~~~~~~
+    An argument for 'bandId' was not provided.
+
+src/pages/AdminUsers.tsx:47:55 - error TS2559: Type '"/api/users"' has no properties in common with type 'RequestInit'.
+
+47       const data = await apiFetch<AdminUser[]>('GET', '/api/users');
+                                                         ~~~~~~~~~~~~
+
+src/pages/AdminUsers.tsx:61:55 - error TS2554: Expected 1-2 arguments, but got 3.
+
+61       await apiFetch('PATCH', `/api/users/${userId}`, { platform_role: role });
+                                                         ~~~~~~~~~~~~~~~~~~~~~~~
+
+src/pages/AdminUsers.tsx:72:55 - error TS2554: Expected 1-2 arguments, but got 3.
+
+72       await apiFetch('PATCH', `/api/users/${userId}`, { is_active: isActive });
+                                                         ~~~~~~~~~~~~~~~~~~~~~~~
+
+src/pages/GigDetail.tsx:48:9 - error TS2322: Type '(bandId: string, gig: Partial<Gig>) => Promise<Gig>' is not assignable to type 'MutationFunction<Gig, string>'.
+  Types of parameters 'gig' and 'context' are incompatible.
+    Type 'MutationFunctionContext' has no properties in common with type 'Partial<Gig>'.
+
+48         mutationFn: saveGig,
+           ~~~~~~~~~~
+
+  node_modules/@tanstack/query-core/build/modern/hydration-DksKBgQq.d.ts:1198:5
+    1198     mutationFn?: MutationFunction<TData, TVariables>;
+             ~~~~~~~~~~
+    The expected type comes from property 'mutationFn' which is declared here on type 'UseMutationOptions<Gig, any, string, unknown>'
+
+src/pages/GigDetail.tsx:58:9 - error TS2322: Type '(bandId: string, id: string) => Promise<unknown>' is not assignable to type 'MutationFunction<unknown, string>'.
+  Types of parameters 'id' and 'context' are incompatible.
+    Type 'MutationFunctionContext' is not assignable to type 'string'.
+
+58         mutationFn: deleteGig,
+           ~~~~~~~~~~
+
+  node_modules/@tanstack/query-core/build/modern/hydration-DksKBgQq.d.ts:1198:5
+    1198     mutationFn?: MutationFunction<TData, TVariables>;
+             ~~~~~~~~~~
+    The expected type comes from property 'mutationFn' which is declared here on type 'UseMutationOptions<unknown, any, string, unknown>'
+
+src/pages/GigDetail.tsx:377:72 - error TS2345: Argument of type 'Partial<Gig>' is not assignable to parameter of type 'string'.
+
+377                             <Button onClick={() => saveMutation.mutate(editForm)} disabled={saveMutation.isPending}>Save Changes</Button>
+                                                                           ~~~~~~~~
+
+src/pages/Gigs.tsx:93:19 - error TS2554: Expected 2 arguments, but got 1.
+
+93             await saveGig({
+                     ~~~~~~~
+
+  src/lib/api.ts:44:47
+    44 export const saveGig = async (bandId: string, gig: Partial<Gig>): Promise<Gig> => {
+                                                     ~~~~~~~~~~~~~~~~~
+    An argument for 'gig' was not provided.
+
+src/pages/Login.tsx:135:40 - error TS2551: Property 'forgetPassword' does not exist on type '{ signIn: { social: <FetchOptions extends ClientFetchOption<Partial<{ provider: "line" | (string & {}) | "linear" | "huggingface" | "github" | "apple" | "atlassian" | "cognito" | "discord" | "facebook" | "figma" | "microsoft" | ... 23 more ... | "wechat"; ... 8 more ...; additionalData?: Record<...>; }> & Record<......'. Did you mean 'resetPassword'?
+
+135     const { error } = await authClient.forgetPassword({
+                                           ~~~~~~~~~~~~~~
+
+src/pages/OnboardingWizard.tsx:51:48 - error TS2554: Expected 1-2 arguments, but got 3.
+
+51       await apiFetch('PATCH', '/api/users/me', { first_name: firstName.trim(), last_name: lastName.trim() });
+                                                  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+src/pages/PerformanceMode.tsx:222:41 - error TS2554: Expected 2 arguments, but got 1.
+
+222                   const session = await getGigSession(gigId);
+                                            ~~~~~~~~~~~~~
+
+  src/lib/api.ts:105:47
+    105 export const getGigSession = (bandId: string, gigId: string) =>
+                                                      ~~~~~~~~~~~~~
+    An argument for 'gigId' was not provided.
+
+src/pages/PerformanceMode.tsx:246:17 - error TS2554: Expected 3 arguments, but got 2.
+
+246           await updateSessionState(recoveryData.session.id, {
+                    ~~~~~~~~~~~~~~~~~~
+
+  src/lib/api.ts:135:3
+    135   state: {
+          ~~~~~~~~
+    136     current_set_index?:  number;
+        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    ... 
+    139     is_on_break?:        boolean;
+        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    140   }
+        ~~~
+    An argument for 'state' was not provided.
+
+src/pages/PerformanceMode.tsx:251:17 - error TS2554: Expected 3 arguments, but got 2.
+
+251           await forceLeadership(recoveryData.session.id, userId!);
+                    ~~~~~~~~~~~~~~~
+
+  src/lib/api.ts:149:68
+    149 export const forceLeadership = (bandId: string, sessionId: string, userId: string) =>
+                                                                           ~~~~~~~~~~~~~~
+    An argument for 'userId' was not provided.
+
+src/pages/PerformanceMode.tsx:267:17 - error TS2554: Expected 2 arguments, but got 1.
+
+267           await endGigSession(recoveryData.session.id);
+                    ~~~~~~~~~~~~~
+
+  src/lib/api.ts:114:47
+    114 export const endGigSession = (bandId: string, sessionId: string) =>
+                                                      ~~~~~~~~~~~~~~~~~
+    An argument for 'sessionId' was not provided.
+
+src/pages/PerformanceMode.tsx:317:17 - error TS2554: Expected 3 arguments, but got 2.
+
+317           await updateSessionState(sessionData.id, {
+                    ~~~~~~~~~~~~~~~~~~
+
+  src/lib/api.ts:135:3
+    135   state: {
+          ~~~~~~~~
+    136     current_set_index?:  number;
+        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    ... 
+    139     is_on_break?:        boolean;
+        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    140   }
+        ~~~
+    An argument for 'state' was not provided.
+
+src/pages/PerformanceMode.tsx:340:13 - error TS2554: Expected 3 arguments, but got 2.
+
+340       await updateSessionState(sessionData.id, updates);
+                ~~~~~~~~~~~~~~~~~~
+
+  src/lib/api.ts:135:3
+    135   state: {
+          ~~~~~~~~
+    136     current_set_index?:  number;
+        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    ... 
+    139     is_on_break?:        boolean;
+        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    140   }
+        ~~~
+    An argument for 'state' was not provided.
+
+src/pages/PerformanceMode.tsx:349:13 - error TS2554: Expected 3 arguments, but got 2.
+
+349       await updateSessionState(sessionData.id, { is_on_break: false });
+                ~~~~~~~~~~~~~~~~~~
+
+  src/lib/api.ts:135:3
+    135   state: {
+          ~~~~~~~~
+    136     current_set_index?:  number;
+        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    ... 
+    139     is_on_break?:        boolean;
+        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    140   }
+        ~~~
+    An argument for 'state' was not provided.
+
+src/pages/PerformanceMode.tsx:484:13 - error TS2554: Expected 3 arguments, but got 2.
+
+484       await addSkippedSong(gigId, activeSong.id);
+                ~~~~~~~~~~~~~~
+
+  src/lib/api.ts:62:63
+    62 export const addSkippedSong = (bandId: string, gigId: string, songId: string) =>
+                                                                     ~~~~~~~~~~~~~~
+    An argument for 'songId' was not provided.
+
+src/pages/PerformanceMode.tsx:491:13 - error TS2554: Expected 3 arguments, but got 2.
+
+491       await removeSkippedSong(gigId, song.id);
+                ~~~~~~~~~~~~~~~~~
+
+  src/lib/api.ts:71:66
+    71 export const removeSkippedSong = (bandId: string, gigId: string, songId: string) =>
+                                                                        ~~~~~~~~~~~~~~
+    An argument for 'songId' was not provided.
+
+src/pages/PerformanceMode.tsx:523:13 - error TS2345: Argument of type '() => () => boolean' is not assignable to parameter of type 'EffectCallback'.
+  Type '() => boolean' is not assignable to type 'void | Destructor'.
+    Type '() => boolean' is not assignable to type 'Destructor'.
+      Type 'boolean' is not assignable to type 'void | { [UNDEFINED_VOID_ONLY]: never; }'.
+
+523   useEffect(() => {
+                ~~~~~~~
+
+src/pages/PerformanceMode.tsx:536:23 - error TS2559: Type 'string' has no properties in common with type 'RequestInit'.
+
+536                       `/api/users/${msg.data.requester_id}/public`
+                          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+src/pages/PerformanceMode.tsx:575:17 - error TS2554: Expected 3 arguments, but got 2.
+
+575           await forceLeadership(sessionData.id, userId);
+                    ~~~~~~~~~~~~~~~
+
+  src/lib/api.ts:149:68
+    149 export const forceLeadership = (bandId: string, sessionId: string, userId: string) =>
+                                                                           ~~~~~~~~~~~~~~
+    An argument for 'userId' was not provided.
+
+src/pages/PerformanceMode.tsx:588:13 - error TS2554: Expected 3 arguments, but got 2.
+
+588       await resolveLeadershipRequest(incomingRequest.id, approved ? 'approved' : 'denied');
+                ~~~~~~~~~~~~~~~~~~~~~~~~
+
+  src/lib/api.ts:146:77
+    146 export const resolveLeadershipRequest = (bandId: string, requestId: string, status: 'approved' | 'denied') =>
+                                                                                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    An argument for 'status' was not provided.
+
+src/pages/PerformanceMode.tsx:590:17 - error TS2554: Expected 3 arguments, but got 2.
+
+590           await forceLeadership(sessionData!.id, incomingRequest.requester_id);
+                    ~~~~~~~~~~~~~~~
+
+  src/lib/api.ts:149:68
+    149 export const forceLeadership = (bandId: string, sessionId: string, userId: string) =>
+                                                                           ~~~~~~~~~~~~~~
+    An argument for 'userId' was not provided.
+
+src/pages/PerformanceMode.tsx:598:13 - error TS2554: Expected 3 arguments, but got 2.
+
+598       await forceLeadership(sessionData.id, newLeaderId);
+                ~~~~~~~~~~~~~~~
+
+  src/lib/api.ts:149:68
+    149 export const forceLeadership = (bandId: string, sessionId: string, userId: string) =>
+                                                                           ~~~~~~~~~~~~~~
+    An argument for 'userId' was not provided.
+
+src/pages/PerformanceMode.tsx:605:13 - error TS2554: Expected 2 arguments, but got 1.
+
+605       await endGigSession(sessionData.id);
+                ~~~~~~~~~~~~~
+
+  src/lib/api.ts:114:47
+    114 export const endGigSession = (bandId: string, sessionId: string) =>
+                                                      ~~~~~~~~~~~~~~~~~
+    An argument for 'sessionId' was not provided.
+
+src/pages/PerformanceMode.tsx:1164:43 - error TS2554: Expected 2 arguments, but got 1.
+
+1164                           if(sessionData) endGigSession(sessionData.id);
+                                               ~~~~~~~~~~~~~
+
+  src/lib/api.ts:114:47
+    114 export const endGigSession = (bandId: string, sessionId: string) =>
+                                                      ~~~~~~~~~~~~~~~~~
+    An argument for 'sessionId' was not provided.
+
+src/pages/PerformanceSelection.tsx:56:42 - error TS2345: Argument of type 'boolean' is not assignable to parameter of type 'string'.
+
+56        return createSetlist(newListName, true, false); // Create Personal Setlist by default
+                                            ~~~~
+
+src/pages/Profile.tsx:57:48 - error TS2554: Expected 1-2 arguments, but got 3.
+
+57       await apiFetch('PATCH', '/api/users/me', {
+                                                  ~
+58         first_name: firstName.trim(),
+   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+59         last_name:  lastName.trim(),
+   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+60       });
+   ~~~~~~~
+
+src/pages/Profile.tsx:97:32 - error TS2559: Type '"/api/users/me"' has no properties in common with type 'RequestInit'.
+
+97       await apiFetch('DELETE', '/api/users/me');
+                                  ~~~~~~~~~~~~~~~
+
+src/pages/ReactivateAccount.tsx:19:30 - error TS2559: Type '"/api/users/me/reactivate"' has no properties in common with type 'RequestInit'.
+
+19       await apiFetch('POST', '/api/users/me/reactivate');
+                                ~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+src/pages/SetlistDetail.tsx:342:17 - error TS2554: Expected 2 arguments, but got 1.
+
+342           await syncSetlist(localSetlist);
+                    ~~~~~~~~~~~
+
+  src/lib/api.ts:100:45
+    100 export const syncSetlist = (bandId: string, setlist: Setlist) =>
+                                                    ~~~~~~~~~~~~~~~~
+    An argument for 'setlist' was not provided.
+
+src/pages/Setlists.tsx:86:17 - error TS2554: Expected 4 arguments, but got 3.
+
+86          return cloneSetlist(sourceSetlistId, newListName, isPersonal);
+                   ~~~~~~~~~~~~
+
+  src/lib/api.ts:94:81
+    94 export const cloneSetlist = (bandId: string, sourceId: string, newName: string, isPersonal: boolean) =>
+                                                                                       ~~~~~~~~~~~~~~~~~~~
+    An argument for 'isPersonal' was not provided.
+
+src/pages/Setlists.tsx:88:44 - error TS2345: Argument of type 'boolean' is not assignable to parameter of type 'string'.
+
+88          return createSetlist(newListName, isPersonal, isDefault);
+                                              ~~~~~~~~~~
+
+src/pages/Setlists.tsx:99:5 - error TS2322: Type '(bandId: string, id: string) => Promise<unknown>' is not assignable to type 'MutationFunction<unknown, string>'.
+  Types of parameters 'id' and 'context' are incompatible.
+    Type 'MutationFunctionContext' is not assignable to type 'string'.
+
+99     mutationFn: deleteSetlist,
+       ~~~~~~~~~~
+
+  node_modules/@tanstack/query-core/build/modern/hydration-DksKBgQq.d.ts:1198:5
+    1198     mutationFn?: MutationFunction<TData, TVariables>;
+             ~~~~~~~~~~
+    The expected type comes from property 'mutationFn' which is declared here on type 'UseMutationOptions<unknown, Error, string, unknown>'
+
+src/pages/Setlists.tsx:109:7 - error TS2322: Type '(bandId: string, id: string) => Promise<unknown>' is not assignable to type 'MutationFunction<unknown, string>'.
+  Types of parameters 'id' and 'context' are incompatible.
+    Type 'MutationFunctionContext' is not assignable to type 'string'.
+
+109       mutationFn: convertSetlistToBand,
+          ~~~~~~~~~~
+
+  node_modules/@tanstack/query-core/build/modern/hydration-DksKBgQq.d.ts:1198:5
+    1198     mutationFn?: MutationFunction<TData, TVariables>;
+             ~~~~~~~~~~
+    The expected type comes from property 'mutationFn' which is declared here on type 'UseMutationOptions<unknown, Error, string, unknown>'
+
+src/pages/Setlists.tsx:146:31 - error TS2554: Expected 2 arguments, but got 1.
+
+146           const usage = await getSetlistUsage(id);
+                                  ~~~~~~~~~~~~~~~
+
+  src/lib/api.ts:82:49
+    82 export const getSetlistUsage = (bandId: string, setlistId: string) =>
+                                                       ~~~~~~~~~~~~~~~~~
+    An argument for 'setlistId' was not provided.
+
+src/pages/SongDetail.tsx:105:5 - error TS2322: Type '(bandId: string, id: string) => Promise<unknown>' is not assignable to type 'MutationFunction<unknown, string>'.
+  Types of parameters 'id' and 'context' are incompatible.
+    Type 'MutationFunctionContext' is not assignable to type 'string'.
+
+105     mutationFn: deleteSong,
+        ~~~~~~~~~~
+
+  node_modules/@tanstack/query-core/build/modern/hydration-DksKBgQq.d.ts:1198:5
+    1198     mutationFn?: MutationFunction<TData, TVariables>;
+             ~~~~~~~~~~
+    The expected type comes from property 'mutationFn' which is declared here on type 'UseMutationOptions<unknown, Error, string, unknown>'
+
+src/pages/SongDetail.tsx:117:5 - error TS2322: Type '(bandId: string, song: Partial<Song>) => Promise<Song>' is not assignable to type 'MutationFunction<Song, string>'.
+  Types of parameters 'song' and 'context' are incompatible.
+    Type 'MutationFunctionContext' has no properties in common with type 'Partial<Song>'.
+
+117     mutationFn: saveSong,
+        ~~~~~~~~~~
+
+  node_modules/@tanstack/query-core/build/modern/hydration-DksKBgQq.d.ts:1198:5
+    1198     mutationFn?: MutationFunction<TData, TVariables>;
+             ~~~~~~~~~~
+    The expected type comes from property 'mutationFn' which is declared here on type 'UseMutationOptions<Song, Error, string, unknown>'
+
+src/pages/SongDetail.tsx:131:29 - error TS2554: Expected 2 arguments, but got 1.
+
+131         const usage = await getSongUsage(id);
+                                ~~~~~~~~~~~~
+
+  src/lib/api.ts:33:46
+    33 export const getSongUsage = (bandId: string, songId: string) =>
+                                                    ~~~~~~~~~~~~~~
+    An argument for 'songId' was not provided.
+
+src/pages/SongDetail.tsx:142:31 - error TS2345: Argument of type '{ is_retired: boolean; id: string; band_id: string; artist: string; title: string; lyrics: string; key: string; tempo: string; duration: string; note: string; cover_url?: string; spotify_url?: string; ... 6 more ...; version: number; }' is not assignable to parameter of type 'string'.
+
+142     updateSongMutation.mutate({ ...song, is_retired: checked });
+                                  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+src/pages/SongDetail.tsx:147:33 - error TS2345: Argument of type '{ tempo: string; id: string; band_id: string; artist: string; title: string; lyrics: string; key: string; duration: string; note: string; cover_url?: string; spotify_url?: string; is_retired?: boolean; ... 6 more ...; version: number; }' is not assignable to parameter of type 'string'.
+
+147       updateSongMutation.mutate({ ...song, tempo: detectedBpm.toString() });
+                                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+src/pages/SongEdit.tsx:59:5 - error TS2322: Type '(bandId: string, song: Partial<Song>) => Promise<Song>' is not assignable to type 'MutationFunction<Song, string>'.
+  Types of parameters 'song' and 'context' are incompatible.
+    Type 'MutationFunctionContext' has no properties in common with type 'Partial<Song>'.
+
+59     mutationFn: saveSong,
+       ~~~~~~~~~~
+
+  node_modules/@tanstack/query-core/build/modern/hydration-DksKBgQq.d.ts:1198:5
+    1198     mutationFn?: MutationFunction<TData, TVariables>;
+             ~~~~~~~~~~
+    The expected type comes from property 'mutationFn' which is declared here on type 'UseMutationOptions<Song, Error, string, unknown>'
+
+src/pages/SongEdit.tsx:76:25 - error TS2345: Argument of type 'Song' is not assignable to parameter of type 'string'.
+
+76     saveMutation.mutate(data);
+                           ~~~~
+
+src/pages/SongList.tsx:136:5 - error TS2322: Type '(bandId: string, id: string) => Promise<unknown>' is not assignable to type 'MutationFunction<unknown, string>'.
+  Types of parameters 'id' and 'context' are incompatible.
+    Type 'MutationFunctionContext' is not assignable to type 'string'.
+
+136     mutationFn: deleteSong,
+        ~~~~~~~~~~
+
+  node_modules/@tanstack/query-core/build/modern/hydration-DksKBgQq.d.ts:1198:5
+    1198     mutationFn?: MutationFunction<TData, TVariables>;
+             ~~~~~~~~~~
+    The expected type comes from property 'mutationFn' which is declared here on type 'UseMutationOptions<unknown, Error, string, unknown>'
+
+src/pages/SongList.tsx:150:16 - error TS2554: Expected 2 arguments, but got 1.
+
+150         return saveSong({ ...songToRetire, is_retired: true });
+                   ~~~~~~~~
+
+  src/lib/api.ts:23:48
+    23 export const saveSong = async (bandId: string, song: Partial<Song>): Promise<Song> => {
+                                                      ~~~~~~~~~~~~~~~~~~~
+    An argument for 'song' was not provided.
+
+src/pages/SongList.tsx:199:29 - error TS2554: Expected 2 arguments, but got 1.
+
+199         const usage = await getSongUsage(song.id);
+                                ~~~~~~~~~~~~
+
+  src/lib/api.ts:33:46
+    33 export const getSongUsage = (bandId: string, songId: string) =>
+                                                    ~~~~~~~~~~~~~~
+    An argument for 'songId' was not provided.
+
+
+Found 59 errors.
