@@ -1,10 +1,7 @@
-import { useEffect, useState, useCallback, useRef } from "react";
-import { supabase } from "@/integrations/supabase/client";
-import { Capacitor } from "@capacitor/core";
-import { App } from "@capacitor/app";
-import { AppStatus, AppPlatform } from "@/types/system";
-import { useQueryClient } from "@tanstack/react-query";
-import { useSyncStatus } from "./useSyncedData";
+import { useEffect, useState, useCallback, useRef } from 'react';
+import { Capacitor } from '@capacitor/core';
+import { App } from '@capacitor/app';
+import { AppStatus, AppPlatform } from '@/types/system';
 
 interface StatusState {
   isMaintenance: boolean;
@@ -13,132 +10,81 @@ interface StatusState {
   loading: boolean;
 }
 
+const API_BASE = import.meta.env.VITE_API_URL ?? 'https://api.setlist.kirknet.io';
+
 export const useAppStatus = () => {
   const [state, setState] = useState<StatusState>({
     isMaintenance: false,
     isUpdateRequired: false,
     statusData: null,
-    loading: true,
+    loading: false,
   });
 
-  const queryClient = useQueryClient();
-  const { refreshAll } = useSyncStatus();
   const lastFetchTime = useRef<number>(0);
-  const fetchTimeout = useRef<NodeJS.Timeout | null>(null);
-
-  // Helper to determine environment
-  const getEnvironment = (): string => {
-    if (import.meta.env.PROD) return 'production';
-    return 'development'; 
-  };
+  const fetchTimeout  = useRef<NodeJS.Timeout | null>(null);
 
   const getPlatform = (): AppPlatform => {
-    const plat = Capacitor.getPlatform();
-    if (plat === 'ios') return 'ios';
-    if (plat === 'android') return 'android';
+    const p = Capacitor.getPlatform();
+    if (p === 'ios')     return 'ios';
+    if (p === 'android') return 'android';
     return 'web';
   };
 
   const checkVersion = async (status: AppStatus): Promise<boolean> => {
     if (!status.requires_update) return false;
-    if (getPlatform() === 'web') return false; 
-
+    if (getPlatform() === 'web') return false;
     try {
       const info = await App.getInfo();
-      const currentBuild = parseInt(info.build) || 0; 
-      if (status.min_version_code && currentBuild < status.min_version_code) {
-        return true;
-      }
-      return false;
-    } catch (e) {
-      console.warn("Failed to check app version", e);
+      const build = parseInt(info.build) || 0;
+      return !!(status.min_version_code && build < status.min_version_code);
+    } catch {
       return false;
     }
   };
 
   const fetchStatus = useCallback(async () => {
-    // Debounce: prevent fetching more than once every 10 seconds
     const now = Date.now();
-    if (now - lastFetchTime.current < 10000) return;
+    if (now - lastFetchTime.current < 10_000) return;
     lastFetchTime.current = now;
 
-    const env = getEnvironment();
-    const platform = getPlatform();
-    
     try {
-        const { data, error } = await supabase
-        .from('app_statuses')
-        .select('*')
-        .eq('environment', env)
-        .in('platform', ['any', platform]);
+      const env      = import.meta.env.PROD ? 'production' : 'development';
+      const platform = getPlatform();
+      const resp = await fetch(
+        `${API_BASE}/api/status?env=${env}&platform=${platform}`,
+        { signal: AbortSignal.timeout(5000) }
+      );
 
-        if (error) {
-            // Silent fail to prevent log spam if offline
-            setState(prev => ({ ...prev, loading: false }));
-            return;
-        }
-
-        if (!data || data.length === 0) {
-            setState({ 
-                isMaintenance: false, 
-                isUpdateRequired: false, 
-                statusData: null, 
-                loading: false 
-            });
-            return;
-        }
-
-        const specific = data.find(d => d.platform === platform);
-        const generic = data.find(d => d.platform === 'any');
-        const effectiveStatus = (specific || generic) as AppStatus;
-
-        const updateNeeded = await checkVersion(effectiveStatus);
-
-        setState(prev => {
-            if (!prev.loading && prev.isMaintenance && !effectiveStatus.is_maintenance) {
-                // Maintenance lifted
-                refreshAll();
-            }
-            return {
-                isMaintenance: effectiveStatus.is_maintenance,
-                isUpdateRequired: updateNeeded,
-                statusData: effectiveStatus,
-                loading: false
-            };
-        });
-    } catch (e) {
-        // Catch network errors silently
+      if (!resp.ok) {
         setState(prev => ({ ...prev, loading: false }));
+        return;
+      }
+
+      const data: AppStatus[] = await resp.json();
+      if (!data || data.length === 0) {
+        setState({ isMaintenance: false, isUpdateRequired: false, statusData: null, loading: false });
+        return;
+      }
+
+      const specific  = data.find(d => d.platform === platform);
+      const generic   = data.find(d => d.platform === 'any');
+      const effective = (specific || generic) as AppStatus;
+
+      const updateNeeded = await checkVersion(effective);
+      setState({ isMaintenance: effective.is_maintenance, isUpdateRequired: updateNeeded, statusData: effective, loading: false });
+    } catch {
+      setState(prev => ({ ...prev, loading: false }));
     }
-  }, [refreshAll]);
+  }, []);
 
   useEffect(() => {
     fetchStatus();
 
-    const channel = supabase
-      .channel('app_status_changes')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'app_statuses' },
-        () => {
-            // Debounce realtime updates too
-            if (fetchTimeout.current) clearTimeout(fetchTimeout.current);
-            fetchTimeout.current = setTimeout(fetchStatus, 2000);
-        }
-      )
-      .subscribe();
-
-    const handleFocus = () => {
-        if (document.visibilityState === 'visible') {
-            fetchStatus();
-        }
-    };
-    
+    const handleFocus = () => { if (document.visibilityState === 'visible') fetchStatus(); };
     window.addEventListener('visibilitychange', handleFocus);
     window.addEventListener('focus', handleFocus);
 
     return () => {
-      supabase.removeChannel(channel);
       window.removeEventListener('visibilitychange', handleFocus);
       window.removeEventListener('focus', handleFocus);
       if (fetchTimeout.current) clearTimeout(fetchTimeout.current);

@@ -1,319 +1,255 @@
 import { create } from 'zustand';
-import { supabase } from '@/integrations/supabase/client';
 import { storageAdapter } from '@/lib/storageAdapter';
-import { Song, Setlist, Gig, Set as SetType, SetSong, Profile } from '@/types';
-import { getCurrentGlobalVersion } from '@/lib/api';
-import { RealtimeChannel } from '@supabase/supabase-js';
+import { wsClient } from '@/lib/wsClient';
+import { apiFetch } from '@/lib/apiFetch';
 import { queryClient } from '@/lib/queryClient';
+import type { Song, Setlist, Gig, Set as SetType, SetSong, GigSession, GigSessionParticipant } from '@/types';
 
-// Constants
-const DB_KEY = 'setlist-pro-v1';
-// Explicitly define tables to sync to ensure we catch everything
-const PERSISTED_TABLES = ['profiles', 'songs', 'gigs', 'setlists', 'sets', 'set_songs'];
+// ── Constants ─────────────────────────────────────────────────────
 
-// Types
-interface DataState {
-  profiles: Record<string, Profile>;
-  songs: Record<string, Song>;
-  gigs: Record<string, Gig>;
-  setlists: Record<string, Setlist>;
-  sets: Record<string, SetType>;
-  set_songs: Record<string, SetSong>;
+const DB_KEY = 'setlistpro-v2';
+
+// ── Per-band data slice ───────────────────────────────────────────
+
+export interface BandDataSlice {
+  songs:                    Record<string, Song>;
+  gigs:                     Record<string, Gig>;
+  setlists:                 Record<string, Setlist>;
+  sets:                     Record<string, SetType>;
+  set_songs:                Record<string, SetSong>;
+  gig_sessions:             Record<string, GigSession>;
+  gig_session_participants: Record<string, GigSessionParticipant>;
+  lastSyncedVersion:        number;
+  lastSyncedAt:             string | null;
 }
 
-interface AppState extends DataState {
-  lastSyncedVersion: number;
-  lastSyncedAt: string | null;
-  isInitialized: boolean;
-  isLoading: boolean;
-  isSyncing: boolean;
-  isOnline: boolean;
+const emptyBandSlice = (): BandDataSlice => ({
+  songs:                    {},
+  gigs:                     {},
+  setlists:                 {},
+  sets:                     {},
+  set_songs:                {},
+  gig_sessions:             {},
+  gig_session_participants: {},
+  lastSyncedVersion:        0,
+  lastSyncedAt:             null,
+});
+
+// ── App state ─────────────────────────────────────────────────────
+
+interface AppState {
+  bandData:       Record<string, BandDataSlice>;
+  isInitialized:  boolean;
+  isLoading:      boolean;
+  isSyncing:      boolean;
+  isOnline:       boolean;
   loadingMessage: string;
   loadingProgress: number;
-  subscription: RealtimeChannel | null;
 
-  // Actions
-  initialize: () => Promise<void>;
-  syncDeltas: () => Promise<void>;
-  processRealtimeUpdate: (payload: any) => Promise<void>;
-  reset: () => Promise<void>;
+  initialize:    () => Promise<void>;
+  syncDelta:     (bandId: string) => Promise<void>;
+  syncAllDeltas: () => Promise<void>;
+  reset:         () => Promise<void>;
   setOnlineStatus: (status: boolean) => void;
+  getBandSlice:  (bandId: string) => BandDataSlice;
 }
 
-// Initial Empty State
-const initialDataState: DataState = {
-  profiles: {},
-  songs: {},
-  gigs: {},
-  setlists: {},
-  sets: {},
-  set_songs: {},
-};
+// ── Store ─────────────────────────────────────────────────────────
 
 export const useStore = create<AppState>((set, get) => ({
-  ...initialDataState,
-  lastSyncedVersion: 0,
-  lastSyncedAt: null,
-  isInitialized: false,
-  isLoading: true,
-  isSyncing: false,
-  isOnline: navigator.onLine,
-  loadingMessage: 'Initializing...',
+  bandData:        {},
+  isInitialized:   false,
+  isLoading:       true,
+  isSyncing:       false,
+  isOnline:        typeof navigator !== 'undefined' ? navigator.onLine : true,
+  loadingMessage:  'Initializing...',
   loadingProgress: 0,
-  subscription: null,
 
   setOnlineStatus: (status) => set({ isOnline: status }),
 
+  getBandSlice: (bandId) => get().bandData[bandId] ?? emptyBandSlice(),
+
   initialize: async () => {
-    // Prevent double init
     if (get().isInitialized) return;
 
     try {
       set({ isLoading: true, loadingMessage: 'Loading local data...' });
 
-      // 1. Setup Realtime Subscription (Singleton)
-      // We explicitly bind to each table to ensure no events are missed by a generic wildcard
-      if (!get().subscription) {
-        console.log("[Store] Setting up Realtime Subscription for all tables...");
-        
-        let channel = supabase.channel('global_store_sync');
-        
-        // Loop through all persisted tables and add a listener for each
-        PERSISTED_TABLES.forEach(table => {
-            channel = channel.on(
-                'postgres_changes', 
-                { event: '*', schema: 'public', table: table }, 
-                (payload) => {
-                    console.log(`[Realtime] Change detected in ${table}:`, payload.eventType);
-                    get().processRealtimeUpdate(payload);
-                }
-            );
-        });
-
-        // Special listener for skipped songs (not in persistent store, but needs invalidation)
-        channel = channel.on(
-            'postgres_changes',
-            { event: '*', schema: 'public', table: 'gig_skipped_songs' },
-            () => {
-                 console.log(`[Realtime] Change detected in gig_skipped_songs`);
-                 queryClient.invalidateQueries({ queryKey: ['skipped_songs_all'] });
-            }
-        );
-        
-        channel.subscribe((status) => {
-             if (status === 'SUBSCRIBED') {
-                 console.log("[Store] Successfully connected to Realtime Changes for: " + PERSISTED_TABLES.join(', '));
-             } else if (status === 'CHANNEL_ERROR') {
-                 console.error("[Store] Realtime connection failed");
-             }
-        });
-        
-        set({ subscription: channel });
-      }
-
-      // 2. Load from Local Storage
-      const cachedString = await storageAdapter.getItem(DB_KEY);
+      // 1. Load cached data from storage
+      const cachedStr = await storageAdapter.getItem(DB_KEY);
       let hasData = false;
 
-      if (cachedString) {
+      if (cachedStr) {
         try {
-          const cached = JSON.parse(cachedString);
-          set({
-            ...cached.data,
-            lastSyncedVersion: cached.lastSyncedVersion || 0,
-            lastSyncedAt: cached.lastSyncedAt,
-          });
-          hasData = true;
-        } catch (e) {
-          console.error("Failed to parse cached data", e);
+          const cached = JSON.parse(cachedStr);
+          if (cached?.bandData) {
+            set({ bandData: cached.bandData });
+            hasData = true;
+          }
+        } catch {
+          console.warn('[Store] Failed to parse cached data');
         }
       }
 
-      // 3. Unblock UI Immediately if we have data (Optimistic Load)
-      if (hasData) {
-          set({ isInitialized: true, isLoading: false });
-      }
+      // 2. Unblock UI immediately if we have cached data
+      if (hasData) set({ isInitialized: true, isLoading: false });
 
-      // 4. Trigger Background Sync if online
-      if (get().isOnline) {
-        get().syncDeltas().then(() => {
-            if (!get().isInitialized) {
-                set({ isInitialized: true, isLoading: false });
-            }
-        });
-      } else {
-          set({ isInitialized: true, isLoading: false });
-      }
-
-    } catch (error) {
-      console.error("Initialization failed:", error);
-      set({ 
-        isLoading: false, 
-        isInitialized: true, 
-        loadingMessage: 'Offline Mode' 
+      // 3. Connect WebSocket
+      wsClient.connect();
+      wsClient.onDelta(async (bandId, _table, serverVersion) => {
+        const slice = get().bandData[bandId];
+        if (!slice || serverVersion > slice.lastSyncedVersion) {
+          await get().syncDelta(bandId);
+          queryClient.invalidateQueries({ queryKey: ['skipped_songs', bandId] });
+        }
       });
-    }
-  },
 
-  syncDeltas: async () => {
-    if (!get().isOnline || get().isSyncing) return;
-
-    set({ isSyncing: true });
-
-    try {
-        const currentVersion = get().lastSyncedVersion;
-        const globalVersion = await getCurrentGlobalVersion();
-        
-        // Smart Check: If local version matches global, we are up to date.
-        // This is called frequently (e.g. on every realtime event), so it must be efficient.
-        if (currentVersion > 0 && currentVersion >= globalVersion) {
-            set({ isSyncing: false });
-            return;
-        }
-
-        let maxVersionFound = currentVersion;
-        const newState: DataState = {
-            profiles: { ...get().profiles },
-            songs: { ...get().songs },
-            gigs: { ...get().gigs },
-            setlists: { ...get().setlists },
-            sets: { ...get().sets },
-            set_songs: { ...get().set_songs },
-        };
-
-        if (get().isLoading) set({ loadingMessage: 'Syncing changes...' });
-
-        let progressStep = 0;
-        const totalSteps = PERSISTED_TABLES.length;
-
-        for (const table of PERSISTED_TABLES) {
-            if (get().isLoading) {
-                progressStep++;
-                set({ loadingProgress: Math.round((progressStep / totalSteps) * 100) });
-            }
-
-            const { data, error } = await supabase
-            .from(table)
-            .select('*')
-            .gt('version', currentVersion)
-            .order('version', { ascending: true });
-
-            if (error) {
-                console.error(`Error syncing ${table}:`, error);
-                continue; 
-            }
-
-            if (data && data.length > 0) {
-                data.forEach((row: any) => {
-                    // @ts-ignore
-                    newState[table][row.id] = row;
-                    if (row.version > maxVersionFound) {
-                        maxVersionFound = row.version;
-                    }
-                });
-            }
-        }
-
-        if (maxVersionFound > currentVersion) {
-            const timestamp = new Date().toISOString();
-            set({
-                ...newState,
-                lastSyncedVersion: maxVersionFound,
-                lastSyncedAt: timestamp
-            });
-            await storageAdapter.setItem(DB_KEY, JSON.stringify({
-                data: newState,
-                lastSyncedVersion: maxVersionFound,
-                lastSyncedAt: timestamp
-            }));
-            console.log(`[Sync] Updated to version ${maxVersionFound}`);
-        }
-
+      // 4. Fetch fresh data from server (bootstrap)
+      if (get().isOnline) {
+        set({ loadingMessage: 'Syncing data...' });
+        await bootstrapFromServer(set, get);
+        if (!get().isInitialized) set({ isInitialized: true, isLoading: false });
+      } else {
+        set({ isInitialized: true, isLoading: false });
+      }
     } catch (err) {
-      console.error("Sync failed", err);
-    } finally {
-      set({ isSyncing: false, loadingMessage: '', loadingProgress: 100 });
+      console.error('[Store] Initialization failed:', err);
+      set({ isLoading: false, isInitialized: true, loadingMessage: 'Offline Mode' });
     }
   },
 
-  processRealtimeUpdate: async (payload: any) => {
+  syncDelta: async (bandId: string) => {
+    if (!get().isOnline) return;
+
+    const slice = get().bandData[bandId] ?? emptyBandSlice();
+    const since = slice.lastSyncedVersion;
+
     try {
-        const { table, eventType, new: newRecord, old: oldRecord } = payload;
-        
-        if (!PERSISTED_TABLES.includes(table)) return;
+      const data = await apiFetch<any>(`/api/sync/delta?band_id=${bandId}&since_version=${since}`);
+      if (!data) return;
 
-        const state = get();
-        
-        // Gap Detection
-        if (newRecord && newRecord.version > state.lastSyncedVersion + 1) {
-            console.log(`[Realtime] Gap detected. Triggering Delta Sync.`);
-            get().syncDeltas();
-            return;
-        }
+      const merged = mergeSlice(slice, data);
+      if (merged.lastSyncedVersion > since) {
+        set(state => ({
+          bandData: { ...state.bandData, [bandId]: merged },
+        }));
+        await persistBandData(get().bandData);
+      }
+    } catch (err) {
+      console.warn(`[Store] Delta sync failed for band ${bandId}:`, err);
+    }
+  },
 
-        // @ts-ignore
-        const currentTableMap = state[table];
-        const newTableMap = { ...currentTableMap };
-        let updatedVersion = state.lastSyncedVersion;
-
-        if (eventType === 'DELETE') {
-            delete newTableMap[oldRecord.id];
-        } else if (newRecord) {
-            const existing = newTableMap[newRecord.id] || {};
-            newTableMap[newRecord.id] = { ...existing, ...newRecord };
-            
-            if (newRecord.version > updatedVersion) {
-                updatedVersion = newRecord.version;
-            }
-        }
-
-        // Optimistic Update
-        set({ 
-            [table as keyof DataState]: newTableMap,
-            lastSyncedVersion: updatedVersion,
-            // We update timestamp immediately for UI feedback
-            lastSyncedAt: new Date().toISOString()
-        });
-
-        // Trigger verification sync (non-blocking)
-        // This ensures that receiving a realtime event IMMEDIATELY triggers a version check
-        // effectively making the sync "realtime" even if the payload was partial.
-        get().syncDeltas();
-
-        // Persist
-        const stateToSave = {
-            data: {
-                profiles: table === 'profiles' ? newTableMap : state.profiles,
-                songs: table === 'songs' ? newTableMap : state.songs,
-                gigs: table === 'gigs' ? newTableMap : state.gigs,
-                setlists: table === 'setlists' ? newTableMap : state.setlists,
-                sets: table === 'sets' ? newTableMap : state.sets,
-                set_songs: table === 'set_songs' ? newTableMap : state.set_songs,
-            },
-            lastSyncedVersion: updatedVersion,
-            lastSyncedAt: new Date().toISOString()
-        };
-        await storageAdapter.setItem(DB_KEY, JSON.stringify(stateToSave));
-
-    } catch (e) {
-        console.error("Error processing realtime update:", e);
-        get().syncDeltas();
+  syncAllDeltas: async () => {
+    if (get().isSyncing || !get().isOnline) return;
+    set({ isSyncing: true });
+    try {
+      await Promise.all(Object.keys(get().bandData).map(id => get().syncDelta(id)));
+    } finally {
+      set({ isSyncing: false });
     }
   },
 
   reset: async () => {
-    console.log("[Store] Resetting store and clearing subscription");
-    const sub = get().subscription;
-    if (sub) {
-        supabase.removeChannel(sub);
-    }
+    wsClient.disconnect();
     await storageAdapter.removeItem(DB_KEY);
-    set({ 
-        ...initialDataState, 
-        lastSyncedVersion: 0, 
-        isInitialized: false, 
-        isLoading: true,
-        subscription: null 
+    set({
+      bandData:       {},
+      isInitialized:  false,
+      isLoading:      true,
+      isSyncing:      false,
+      loadingMessage: 'Initializing...',
     });
-  }
+  },
 }));
+
+// ── Helpers ───────────────────────────────────────────────────────
+
+async function bootstrapFromServer(
+  set: (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void,
+  get: () => AppState
+) {
+  try {
+    const res = await apiFetch<{ bands: Record<string, any> }>('/api/sync/bootstrap');
+    if (!res?.bands) return;
+
+    const newBandData: Record<string, BandDataSlice> = { ...get().bandData };
+
+    for (const [bandId, payload] of Object.entries(res.bands)) {
+      newBandData[bandId] = buildSlice(payload);
+    }
+
+    set({ bandData: newBandData, isSyncing: false });
+    await persistBandData(newBandData);
+    console.log(`[Store] Bootstrap complete — ${Object.keys(newBandData).length} band(s)`);
+  } catch (err) {
+    console.warn('[Store] Bootstrap failed — using cache if available');
+  }
+}
+
+function buildSlice(payload: any): BandDataSlice {
+  const toMap = (arr: any[]) => Object.fromEntries((arr ?? []).map((r: any) => [r.id, r]));
+  return {
+    songs:                    toMap(payload.songs),
+    gigs:                     toMap(payload.gigs),
+    setlists:                 toMap(payload.setlists),
+    sets:                     toMap(payload.sets),
+    set_songs:                toMap(payload.set_songs),
+    gig_sessions:             toMap(payload.gig_sessions),
+    gig_session_participants: toMap(payload.gig_session_participants),
+    lastSyncedVersion:        payload.version ?? 0,
+    lastSyncedAt:             new Date().toISOString(),
+  };
+}
+
+function mergeSlice(existing: BandDataSlice, delta: any): BandDataSlice {
+  const merge = (current: Record<string, any>, rows: any[]) => {
+    const out = { ...current };
+    for (const row of rows ?? []) out[row.id] = { ...(out[row.id] ?? {}), ...row };
+    return out;
+  };
+
+  const maxVer = (rows: any[]) =>
+    rows?.reduce((max: number, r: any) => Math.max(max, r.version ?? 0), 0) ?? 0;
+
+  const allRows = [
+    ...(delta.songs ?? []),
+    ...(delta.gigs ?? []),
+    ...(delta.setlists ?? []),
+    ...(delta.sets ?? []),
+    ...(delta.set_songs ?? []),
+    ...(delta.gig_sessions ?? []),
+    ...(delta.gig_session_participants ?? []),
+  ];
+
+  const newVersion = Math.max(
+    existing.lastSyncedVersion,
+    delta.current_version ?? 0,
+    maxVer(allRows)
+  );
+
+  return {
+    songs:                    merge(existing.songs,                    delta.songs),
+    gigs:                     merge(existing.gigs,                     delta.gigs),
+    setlists:                 merge(existing.setlists,                 delta.setlists),
+    sets:                     merge(existing.sets,                     delta.sets),
+    set_songs:                merge(existing.set_songs,                delta.set_songs),
+    gig_sessions:             merge(existing.gig_sessions,             delta.gig_sessions),
+    gig_session_participants: merge(existing.gig_session_participants, delta.gig_session_participants),
+    lastSyncedVersion:        newVersion,
+    lastSyncedAt:             new Date().toISOString(),
+  };
+}
+
+async function persistBandData(bandData: Record<string, BandDataSlice>) {
+  try {
+    await storageAdapter.setItem(DB_KEY, JSON.stringify({ bandData }));
+  } catch {
+    console.warn('[Store] Failed to persist band data');
+  }
+}
+
+// ── Legacy shape (for compat during migration) ────────────────────
+// Components that still read store.songs / store.gigs etc. will get
+// data from the ACTIVE band if activeBandId is provided via BandContext.
+// New components should use useBandSlice(bandId) directly.

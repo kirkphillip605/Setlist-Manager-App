@@ -10,13 +10,15 @@ import {
 import { 
   Menu, Settings, Shield, User, LogOut, Moon, Sun, 
   Cloud, RefreshCw, CheckCircle2, CloudOff, Radio, Maximize, Minimize,
-  ChevronLeft, Layout, Activity, Palette, Volume2, Play
+  ChevronLeft, Layout, Activity, Palette, Volume2, Play,
+  Music2, Users
 } from "lucide-react";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle
 } from "@/components/ui/alert-dialog";
 import { useAuth } from "@/context/AuthContext";
+import { useBand } from "@/context/BandContext";
 import { useTheme } from "@/components/theme-provider";
 import { useSyncStatus } from "@/hooks/useSyncedData";
 import { useNetworkStatus } from "@/hooks/useNetworkStatus";
@@ -27,7 +29,7 @@ import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { useImmersiveMode } from "@/context/ImmersiveModeContext";
 import { Capacitor } from "@capacitor/core";
-import { supabase } from "@/integrations/supabase/client";
+import { apiFetch } from "@/lib/apiFetch";
 import { UserPreferences } from "@/types";
 import { useMetronome } from "@/components/MetronomeContext";
 
@@ -40,6 +42,7 @@ interface MainMenuProps {
 export const MainMenu = ({ open: controlledOpen, onOpenChange: setControlledOpen, trigger }: MainMenuProps) => {
   const navigate = useNavigate();
   const { signOut, isAdmin, profile, refreshProfile } = useAuth();
+  const { bands, activeBand, activeBandId, setActiveBand, isManager } = useBand();
   const { setTheme, theme } = useTheme();
   const { isSyncing, lastSyncedAt, refreshAll } = useSyncStatus();
   const isOnline = useNetworkStatus();
@@ -99,17 +102,11 @@ export const MainMenu = ({ open: controlledOpen, onOpenChange: setControlledOpen
   const savePreference = async (key: keyof UserPreferences, value: any) => {
       const newPrefs = { ...prefs, [key]: value };
       setPrefs(newPrefs); // Optimistic update
-
-      if (profile) {
-          const { error } = await supabase.from('profiles').update({
-              preferences: newPrefs
-          }).eq('id', profile.id);
-          
-          if (error) {
-              console.error("Failed to save pref", error);
-          } else {
-              refreshProfile(); // Sync context
-          }
+      try {
+          await apiFetch('PATCH', '/api/users/me', { preferences: newPrefs });
+          refreshProfile();
+      } catch (e) {
+          console.error('Failed to save preference', e);
       }
   };
 
@@ -138,10 +135,52 @@ export const MainMenu = ({ open: controlledOpen, onOpenChange: setControlledOpen
               </div>
           </div>
 
+          {/* Band Group */}
+          <div className="space-y-2">
+              <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-2">Your Band</h3>
+              <div className="space-y-1">
+                  {/* Band Switcher */}
+                  {bands.length > 0 && (
+                    <div className="px-2 py-1">
+                      {bands.length === 1 ? (
+                        <div className="flex items-center gap-2 text-sm">
+                          <Music2 className="h-4 w-4 text-primary shrink-0" />
+                          <span className="font-medium truncate">{activeBand?.name ?? bands[0].name}</span>
+                        </div>
+                      ) : (
+                        <Select value={activeBandId ?? ''} onValueChange={id => { setActiveBand(id); }}>
+                          <SelectTrigger className="h-9 w-full bg-muted/40 border-0">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <Music2 className="h-4 w-4 text-primary shrink-0" />
+                              <SelectValue placeholder="Select band" />
+                            </div>
+                          </SelectTrigger>
+                          <SelectContent>
+                            {bands.map(b => (
+                              <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )}
+                    </div>
+                  )}
+                  {isManager && (
+                    <Button variant="ghost" className="w-full justify-start gap-3" onClick={() => handleNav('/bands/manage')}>
+                        <Users className="h-4 w-4" />
+                        Manage Band
+                    </Button>
+                  )}
+                  <Button variant="ghost" className="w-full justify-start gap-3" onClick={() => handleNav('/bands/setup')}>
+                      <Music2 className="h-4 w-4" />
+                      {bands.length === 0 ? 'Create or Join Band' : 'Join Another Band'}
+                  </Button>
+              </div>
+          </div>
+
           {/* Admin Group */}
           {isAdmin && (
               <div className="space-y-2">
-                  <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-2">Band Admin</h3>
+                  <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-2">Platform Admin</h3>
                   <div className="space-y-1">
                       <Button variant="ghost" className="w-full justify-start gap-3" onClick={() => handleNav("/admin/users")}>
                           <Shield className="h-4 w-4" />

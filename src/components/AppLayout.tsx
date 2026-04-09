@@ -16,6 +16,7 @@ import {
 import { useEffect, useState, useLayoutEffect } from "react";
 import { motion } from "framer-motion";
 import { useAuth } from "@/context/AuthContext";
+import { useBand } from "@/context/BandContext";
 import { PendingApprovalNotifier } from "./PendingApprovalNotifier";
 import { MainMenu } from "./MainMenu";
 import { useImmersiveMode } from "@/context/ImmersiveModeContext";
@@ -29,6 +30,7 @@ const AppLayout = ({ children }: AppLayoutProps) => {
   const location = useLocation();
   const navigate = useNavigate();
   const { signOut, isAdmin } = useAuth();
+  const { activeBand } = useBand();
   const { isImmersive } = useImmersiveMode();
   
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
@@ -144,7 +146,12 @@ const AppLayout = ({ children }: AppLayoutProps) => {
           <div className={cn("flex items-center gap-3 mb-4 transition-all h-10", isSidebarCollapsed ? "justify-center" : "justify-start")}>
              <img src={iconPath} alt="Icon" className="w-8 h-8 shrink-0 drop-shadow-md" />
              {!isSidebarCollapsed && (
-                 <span className="font-bold text-sm tracking-tight truncate">Setlist Manager Pro</span>
+               <div className="min-w-0">
+                 <span className="font-bold text-sm tracking-tight truncate block">Setlist Manager Pro</span>
+                 {activeBand && (
+                   <span className="text-xs text-muted-foreground truncate block">{activeBand.name}</span>
+                 )}
+               </div>
              )}
           </div>
         </div>
@@ -198,11 +205,15 @@ const AppLayout = ({ children }: AppLayoutProps) => {
 
       {/* Mobile Header */}
       <header className={headerClass}>
-         <div className="flex items-center gap-2">
-            <img src={iconPath} alt="Icon" className="w-6 h-6 drop-shadow-sm" />
-            <span className="font-bold text-sm">Setlist Manager Pro</span>
+         <div className="flex items-center gap-2 min-w-0">
+            <img src={iconPath} alt="Icon" className="w-6 h-6 drop-shadow-sm shrink-0" />
+            <div className="min-w-0">
+              <span className="font-bold text-sm block leading-tight">Setlist Manager Pro</span>
+              {activeBand && (
+                <span className="text-xs text-muted-foreground truncate block leading-tight">{activeBand.name}</span>
+              )}
+            </div>
          </div>
-         {/* Use MainMenu normally here for mobile */}
          <MainMenu />
       </header>
 

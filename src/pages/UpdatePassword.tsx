@@ -1,38 +1,34 @@
-import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
-import { toast } from "sonner";
-import { Loader2 } from "lucide-react";
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { authClient } from '@/lib/authClient';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Label } from '@/components/ui/label';
+import { toast } from 'sonner';
+import { Loader2 } from 'lucide-react';
 
 const UpdatePassword = () => {
-  const navigate = useNavigate();
-  const [password, setPassword] = useState("");
-  const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    // Verify user is actually logged in (recovery link logs them in)
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!session) {
-        navigate("/login");
-      }
-    });
-  }, [navigate]);
+  const navigate  = useNavigate();
+  const [password, setPassword]         = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [loading, setLoading]           = useState(false);
 
   const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (password !== confirmPassword) {
+      toast.error('Passwords do not match');
+      return;
+    }
     setLoading(true);
 
-    const { error } = await supabase.auth.updateUser({ password });
+    const { error } = await (authClient as any).updatePassword({ newPassword: password });
 
     if (error) {
-      toast.error(error.message);
+      toast.error(error.message ?? 'Failed to update password');
     } else {
-      toast.success("Password updated successfully!");
-      navigate("/");
+      toast.success('Password updated successfully!');
+      navigate('/');
     }
     setLoading(false);
   };
@@ -49,12 +45,17 @@ const UpdatePassword = () => {
             <div className="space-y-2">
               <Label htmlFor="password">New Password</Label>
               <Input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                minLength={6}
+                id="password" type="password"
+                value={password} onChange={e => setPassword(e.target.value)}
+                required minLength={8}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="confirm-password">Confirm Password</Label>
+              <Input
+                id="confirm-password" type="password"
+                value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)}
+                required minLength={8}
               />
             </div>
             <Button type="submit" className="w-full" disabled={loading}>

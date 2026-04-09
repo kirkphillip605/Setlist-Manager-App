@@ -15,7 +15,7 @@ if (import.meta.env.VITE_SENTRY_DSN) {
     // Tracing
     tracesSampleRate: 1.0, 
     // Set 'tracePropagationTargets' to control for which URLs distributed tracing should be enabled
-    tracePropagationTargets: ["localhost", /^https:\/\/.*\.supabase\.co/],
+    tracePropagationTargets: ["localhost", /^https:\/\/api\.setlist\.kirknet\.io/],
     // Session Replay
     replaysSessionSampleRate: 0.1, 
     replaysOnErrorSampleRate: 1.0, 

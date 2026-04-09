@@ -1,249 +1,109 @@
-import { useState, useEffect, useRef } from "react";
-import { useNavigate } from "react-router-dom";
-import { useAuth } from "@/context/AuthContext";
-import { supabase } from "@/integrations/supabase/client";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, User, Lock, CheckCircle2 } from "lucide-react";
-import { toast } from "sonner";
-import { LoadingDialog } from "@/components/LoadingDialog";
-
-const POSITIONS = [
-  "Lead Vocals", "Lead Guitar", "Rhythm Guitar", "Bass Guitar", 
-  "Drums", "Keyboard/Piano", "Sound Engineer", "Lighting", "Other"
-];
+import { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '@/context/AuthContext';
+import { apiFetch } from '@/lib/apiFetch';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
+import { Loader2, User, CheckCircle2 } from 'lucide-react';
+import { toast } from 'sonner';
+import { LoadingDialog } from '@/components/LoadingDialog';
 
 const OnboardingWizard = () => {
-  const { session, profile, refreshProfile, signOut } = useAuth();
+  const { user, profile, refreshProfile, signOut } = useAuth();
   const navigate = useNavigate();
-  
-  // Steps: 1 = Profile, 2 = Password (if needed)
-  const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
 
-  // Form State
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
-  const [position, setPosition] = useState("");
-  
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-
+  const [firstName, setFirstName]  = useState('');
+  const [lastName,  setLastName]   = useState('');
   const initializedRef = useRef(false);
 
-  // Pre-fill logic (Run ONCE)
+  // Pre-fill from profile or OAuth metadata (runs once)
   useEffect(() => {
     if (initializedRef.current) return;
+    if (profile?.first_name) setFirstName(profile.first_name);
+    if (profile?.last_name)  setLastName(profile.last_name);
+    if (profile?.first_name || profile?.last_name) { initializedRef.current = true; return; }
 
-    if (profile) {
-        if (profile.first_name) setFirstName(profile.first_name);
-        if (profile.last_name) setLastName(profile.last_name);
-        if (profile.position) setPosition(profile.position);
-        
-        // If we found data, mark initialized to stop overwriting user typing
-        if (profile.first_name || profile.last_name) initializedRef.current = true;
+    // Try Google OAuth metadata
+    const meta = (user as any)?.user_metadata ?? {};
+    if (meta.full_name) {
+      const parts = meta.full_name.split(' ');
+      setFirstName(parts[0] ?? '');
+      setLastName(parts.slice(1).join(' ') ?? '');
+      initializedRef.current = true;
+    } else if (meta.given_name) {
+      setFirstName(meta.given_name  ?? '');
+      setLastName(meta.family_name  ?? '');
+      initializedRef.current = true;
     }
-    
-    // If profile is empty/loading, try to get from Google metadata
-    if ((!profile?.first_name) && session?.user?.user_metadata) {
-        const meta = session.user.user_metadata;
-        if (meta.full_name) {
-            const parts = meta.full_name.split(' ');
-            if (parts.length >= 1) setFirstName(parts[0]);
-            if (parts.length >= 2) setLastName(parts.slice(1).join(' '));
-            initializedRef.current = true;
-        } else {
-            if (meta.given_name) setFirstName(meta.given_name);
-            if (meta.family_name) setLastName(meta.family_name);
-            initializedRef.current = true;
-        }
-    }
-  }, [profile, session]);
+  }, [profile, user]);
 
-  const needsPassword = profile && profile.has_password === false;
-
-  const handleProfileSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!firstName.trim() || !lastName.trim()) {
+      toast.error('Please enter your first and last name');
+      return;
+    }
     setLoading(true);
-
-    const { error } = await supabase
-        .from('profiles')
-        .update({
-            first_name: firstName,
-            last_name: lastName,
-            position: position,
-            updated_at: new Date().toISOString()
-        })
-        .eq('id', session?.user?.id);
-
-    if (error) {
-        toast.error(error.message);
-        setLoading(false);
-        return;
+    try {
+      await apiFetch('PATCH', '/api/users/me', { first_name: firstName.trim(), last_name: lastName.trim() });
+      await refreshProfile();
+      navigate('/');
+    } catch (err: any) {
+      toast.error(err?.message ?? 'Failed to save profile');
+    } finally {
+      setLoading(false);
     }
-
-    // Refresh context
-    await refreshProfile();
-    setLoading(false);
-
-    if (needsPassword) {
-        setStep(2);
-    } else {
-        navigate("/");
-    }
-  };
-
-  const handlePasswordSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (password !== confirmPassword) {
-        toast.error("Passwords do not match");
-        return;
-    }
-    if (password.length < 6) {
-        toast.error("Password must be at least 6 characters");
-        return;
-    }
-
-    setLoading(true);
-    
-    // 1. Set Auth Password
-    const { error: authError } = await supabase.auth.updateUser({ password });
-    if (authError) {
-        toast.error(authError.message);
-        setLoading(false);
-        return;
-    }
-
-    // 2. Update DB Flag
-    const { error: dbError } = await supabase
-        .from('profiles')
-        .update({ has_password: true })
-        .eq('id', session?.user?.id);
-
-    if (dbError) {
-        toast.error("Failed to update profile status");
-    } else {
-        toast.success("Setup complete!");
-        await refreshProfile();
-        navigate("/");
-    }
-    setLoading(false);
   };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4 overflow-y-auto">
-      <LoadingDialog open={loading} message={step === 1 ? "Saving profile..." : "Setting password..."} />
+      <LoadingDialog open={loading} message="Saving profile..." />
       <Card className="w-full max-w-md border-border shadow-lg my-auto">
-        
-        {step === 1 && (
-            <form onSubmit={handleProfileSubmit}>
-                <CardHeader>
-                    <div className="mx-auto bg-primary/10 p-4 rounded-full mb-4">
-                        <User className="h-8 w-8 text-primary" />
-                    </div>
-                    <CardTitle className="text-center">Complete Your Profile</CardTitle>
-                    <CardDescription className="text-center">
-                        Tell us a bit about yourself to get started.
-                    </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                            <Label htmlFor="fname">First Name</Label>
-                            <Input 
-                                id="fname" 
-                                value={firstName} 
-                                onChange={e => setFirstName(e.target.value)} 
-                                required 
-                                autoComplete="given-name"
-                            />
-                        </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="lname">Last Name</Label>
-                            <Input 
-                                id="lname" 
-                                value={lastName} 
-                                onChange={e => setLastName(e.target.value)} 
-                                required 
-                                autoComplete="family-name"
-                            />
-                        </div>
-                    </div>
-                    
-                    <div className="space-y-2">
-                        <Label htmlFor="pos">Band Position</Label>
-                        <Select value={position} onValueChange={setPosition} required>
-                            <SelectTrigger>
-                                <SelectValue placeholder="Select your role" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {POSITIONS.map(p => (
-                                    <SelectItem key={p} value={p}>{p}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
-                </CardContent>
-                <CardFooter className="flex flex-col gap-2">
-                    <Button type="submit" className="w-full" disabled={loading || !firstName || !lastName || !position}>
-                        {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                        {needsPassword ? "Next: Set Password" : "Continue to App"}
-                    </Button>
-                    <Button type="button" variant="ghost" className="w-full text-xs" onClick={() => signOut()}>
-                        Cancel & Sign Out
-                    </Button>
-                </CardFooter>
-            </form>
-        )}
+        <CardHeader className="text-center">
+          <div className="mx-auto bg-primary/10 p-4 rounded-full mb-3">
+            <User className="h-8 w-8 text-primary" />
+          </div>
+          <CardTitle className="text-2xl">Welcome to SetlistPRO</CardTitle>
+          <CardDescription>
+            Just a couple of details to get you started.
+          </CardDescription>
+        </CardHeader>
 
-        {step === 2 && (
-            <form onSubmit={handlePasswordSubmit}>
-                <CardHeader>
-                    <div className="mx-auto bg-primary/10 p-4 rounded-full mb-4">
-                        <Lock className="h-8 w-8 text-primary" />
-                    </div>
-                    <CardTitle className="text-center">Create Password</CardTitle>
-                    <CardDescription className="text-center">
-                        For security, please create a password to access your account independently of Google.
-                    </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                    <div className="space-y-2">
-                        <Label htmlFor="pwd">New Password</Label>
-                        <Input 
-                            id="pwd" 
-                            type="password" 
-                            value={password} 
-                            onChange={e => setPassword(e.target.value)} 
-                            required 
-                            autoComplete="new-password"
-                        />
-                    </div>
-                    <div className="space-y-2">
-                        <Label htmlFor="cpwd">Confirm Password</Label>
-                        <Input 
-                            id="cpwd" 
-                            type="password" 
-                            value={confirmPassword} 
-                            onChange={e => setConfirmPassword(e.target.value)} 
-                            required 
-                            autoComplete="new-password"
-                        />
-                    </div>
-                </CardContent>
-                <CardFooter className="flex flex-col gap-2">
-                    <Button type="submit" className="w-full" disabled={loading}>
-                        {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                        <CheckCircle2 className="mr-2 h-4 w-4" />
-                        Complete Setup
-                    </Button>
-                </CardFooter>
-            </form>
-        )}
+        <form onSubmit={handleSubmit}>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="first-name">First Name</Label>
+              <Input
+                id="first-name" placeholder="e.g. John"
+                value={firstName} onChange={e => setFirstName(e.target.value)}
+                autoFocus required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="last-name">Last Name</Label>
+              <Input
+                id="last-name" placeholder="e.g. Smith"
+                value={lastName} onChange={e => setLastName(e.target.value)}
+                required
+              />
+            </div>
+          </CardContent>
 
+          <CardFooter className="flex flex-col gap-2 pt-2">
+            <Button type="submit" className="w-full" disabled={loading}>
+              {loading
+                ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                : <CheckCircle2 className="mr-2 h-4 w-4" />}
+              Save &amp; Continue
+            </Button>
+            <Button type="button" variant="ghost" size="sm" className="w-full" onClick={signOut}>
+              Sign Out
+            </Button>
+          </CardFooter>
+        </form>
       </Card>
     </div>
   );

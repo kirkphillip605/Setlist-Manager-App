@@ -1,27 +1,23 @@
-import { useEffect } from "react";
-import { useNavigate } from "react-router-dom";
-import { useAuth } from "@/context/AuthContext";
-import { Loader2 } from "lucide-react";
+import { useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { authClient } from '@/lib/authClient';
+import { Loader2 } from 'lucide-react';
 
 const AuthCallback = () => {
   const navigate = useNavigate();
-  const { session, loading, profile } = useAuth();
+  const { data: session, isPending } = authClient.useSession();
 
   useEffect(() => {
-    if (!loading) {
-      if (session) {
-        // If profile is missing needed info, go to profile, else home
-        if (profile && (!profile.first_name || !profile.last_name)) {
-            navigate("/profile");
-        } else {
-            navigate("/");
-        }
+    if (!isPending) {
+      if (session?.user) {
+        const user = session.user;
+        const hasName = (user as any).firstName && (user as any).lastName;
+        navigate(hasName ? '/' : '/onboarding', { replace: true });
       } else {
-        // No session found after loading finished -> Login
-        navigate("/login");
+        navigate('/login', { replace: true });
       }
     }
-  }, [session, loading, navigate, profile]);
+  }, [session, isPending, navigate]);
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-background gap-4">

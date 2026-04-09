@@ -30,7 +30,8 @@ import { MetronomeControls } from "@/components/MetronomeControls";
 import { useSetlistWithSongs, useSyncedSongs, useSyncedSkippedSongs } from "@/hooks/useSyncedData";
 import { useNetworkStatus } from "@/hooks/useNetworkStatus";
 import { useGigSession } from "@/hooks/useGigSession";
-import { supabase } from "@/integrations/supabase/client";
+import { wsClient } from "@/lib/wsClient";
+import { apiFetch } from "@/lib/apiFetch";
 import { Badge } from "@/components/ui/badge";
 import { TempoBlinker } from "@/components/TempoBlinker";
 import { useAuth } from "@/context/AuthContext";
@@ -518,19 +519,32 @@ const PerformanceMode = () => {
       }
   }, [showSetSongsDialog, currentSetIndex, currentSongIndex, tempSong]);
 
-  // -- Listen for Incoming Leadership Requests --
+  // -- Listen for Incoming Leadership Requests via WS delta --
   useEffect(() => {
       if (!isLeader || !sessionData) return;
-      const channel = supabase.channel(`leader_req:${sessionData.id}`)
-        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'leadership_requests', filter: `session_id=eq.${sessionData.id}` }, 
-        async (payload) => {
-            if (payload.new.status === 'pending') {
-                const { data: user } = await supabase.from('profiles').select('first_name, last_name').eq('id', payload.new.requester_id).single();
-                setIncomingRequest({ ...payload.new, userName: `${user?.first_name} ${user?.last_name}` });
-            }
-        })
-        .subscribe();
-      return () => { supabase.removeChannel(channel); };
+      const unsub = wsClient.onMessage(async (msg: any) => {
+          if (
+              msg?.type === 'delta' &&
+              msg.table === 'leadership_requests' &&
+              msg.event === 'INSERT' &&
+              msg.data?.session_id === sessionData.id &&
+              msg.data?.status === 'pending'
+          ) {
+              try {
+                  const requester = await apiFetch<{ first_name: string; last_name: string }>(
+                      'GET',
+                      `/api/users/${msg.data.requester_id}/public`
+                  );
+                  setIncomingRequest({
+                      ...msg.data,
+                      userName: `${requester?.first_name ?? ''} ${requester?.last_name ?? ''}`.trim() || 'A bandmate',
+                  });
+              } catch {
+                  setIncomingRequest({ ...msg.data, userName: 'A bandmate' });
+              }
+          }
+      });
+      return unsub;
   }, [isLeader, sessionData]);
 
   const [sessionEndedInfo, setSessionEndedInfo] = useState<{ endedBy: string, at: string } | null>(null);

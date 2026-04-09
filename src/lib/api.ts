@@ -1,681 +1,195 @@
-import { supabase } from "@/integrations/supabase/client";
-import { Song, Setlist, Gig, GigSession, Set as SetType, SetSong } from "@/types";
+import { apiGet, apiPost, apiPut, apiPatch, apiDel, apiFetch } from '@/lib/apiFetch';
+import type { Song, Setlist, Gig, GigSession, Set as SetType, SetSong } from '@/types';
 
-// --- Delta Sync Helper ---
+// ── Version helper ────────────────────────────────────────────────
 
-export const fetchDeltas = async (table: string, lastVersion: number) => {
-  const { data, error } = await supabase
-    .from(table)
-    .select('*')
-    .gt('version', lastVersion)
-    .order('version', { ascending: true });
-
-  if (error) throw error;
-  return data;
-};
-
-export const getCurrentGlobalVersion = async (): Promise<number> => {
-  const { data, error } = await supabase.rpc('get_current_global_version');
-  if (error) {
-      console.warn("Failed to get global version, defaulting to fetch-all strategy", error);
-      return Number.MAX_SAFE_INTEGER; // Force sync if check fails
+export const getCurrentGlobalVersion = async (bandId: string): Promise<number> => {
+  try {
+    const res = await apiGet<{ version: number }>(`/api/sync/version?band_id=${bandId}`);
+    return res.version;
+  } catch {
+    return Number.MAX_SAFE_INTEGER;
   }
-  return data as number;
 };
 
-// --- Songs ---
+// ── Songs ─────────────────────────────────────────────────────────
 
-export const getSongs = async (): Promise<Song[]> => {
-  const { data, error } = await supabase
-    .from('songs')
-    .select('*')
-    .is('deleted_at', null)
-    .order('title');
-  if (error) throw error;
-  return data as Song[];
-};
+export const getSongs = (bandId: string) =>
+  apiGet<Song[]>(`/api/bands/${bandId}/songs`);
 
-export const getSong = async (id: string): Promise<Song | null> => {
-  const { data, error } = await supabase
-    .from('songs')
-    .select('*')
-    .eq('id', id)
-    .is('deleted_at', null)
-    .single();
-  if (error) return null;
-  return data as Song;
-};
+export const getSong = (bandId: string, id: string) =>
+  apiGet<Song | null>(`/api/bands/${bandId}/songs/${id}`);
 
-export const saveSong = async (song: Partial<Song>) => {
-  const { data: { user } } = await supabase.auth.getUser();
-  
-  const songData = {
-    title: song.title,
-    artist: song.artist,
-    lyrics: song.lyrics || "",
-    key: song.key || "",
-    tempo: song.tempo || "",
-    duration: song.duration || "",
-    note: song.note || "",
-    cover_url: song.cover_url || null,
-    spotify_url: song.spotify_url || null,
-    is_retired: song.is_retired || false,
-    ...(song.id ? {} : { created_by: user?.id })
-  };
-
+export const saveSong = async (bandId: string, song: Partial<Song>): Promise<Song> => {
   if (song.id) {
-    const { data, error } = await supabase.from('songs').update(songData).eq('id', song.id).select().single();
-    if (error) throw error;
-    return data;
-  } else {
-    const { data, error } = await supabase.from('songs').insert(songData).select().single();
-    if (error) throw error;
-    return data;
+    return apiPut<Song>(`/api/bands/${bandId}/songs/${song.id}`, song);
   }
+  return apiPost<Song>(`/api/bands/${bandId}/songs`, song);
 };
 
-export const deleteSong = async (id: string) => {
-  const { data: { user } } = await supabase.auth.getUser();
-  // Soft delete
-  const { error } = await supabase
-    .from('songs')
-    .update({ 
-      deleted_at: new Date().toISOString(),
-      deleted_by: user?.id 
-    })
-    .eq('id', id);
-  if (error) throw error;
-};
+export const deleteSong = (bandId: string, id: string) =>
+  apiDel(`/api/bands/${bandId}/songs/${id}`);
 
-export const getSongUsage = async (songId: string): Promise<{ setlistName: string; date?: string }[]> => {
-  // Check active (non-deleted) usage
-  const { data, error } = await supabase
-    .from('set_songs')
-    .select(`sets (setlists (name))`)
-    .eq('song_id', songId)
-    .is('deleted_at', null); // Only check active links
+export const getSongUsage = (bandId: string, songId: string) =>
+  apiGet<{ setlistName: string }[]>(`/api/bands/${bandId}/songs/${songId}/usage`);
 
-  if (error) throw error;
-  const usage: { setlistName: string }[] = [];
-  const seen = new Set<string>();
-  data.forEach((item: any) => {
-    const setlist = item.sets?.setlists;
-    if (setlist) {
-      if (!seen.has(setlist.name)) {
-        seen.add(setlist.name);
-        usage.push({ setlistName: setlist.name });
-      }
-    }
-  });
-  return usage;
-};
+// ── Gigs ──────────────────────────────────────────────────────────
 
-// --- Gigs ---
+export const getGigs = (bandId: string) =>
+  apiGet<Gig[]>(`/api/bands/${bandId}/gigs`);
 
-export const getGigs = async (): Promise<Gig[]> => {
-  const { data, error } = await supabase
-    .from('gigs')
-    .select(`*, setlist:setlists(id, name)`)
-    .is('deleted_at', null)
-    .order('start_time', { ascending: true });
-    
-  if (error) throw error;
-  return data as Gig[];
-};
+export const getGig = (bandId: string, id: string) =>
+  apiGet<Gig | null>(`/api/bands/${bandId}/gigs/${id}`);
 
-export const getGig = async (id: string): Promise<Gig | null> => {
-  const { data, error } = await supabase
-    .from('gigs')
-    .select(`*, setlist:setlists(id, name)`)
-    .eq('id', id)
-    .is('deleted_at', null)
-    .single();
-
-  if (error) return null;
-  return data as Gig;
-};
-
-export const saveGig = async (gig: Partial<Gig>) => {
-    const { data: { user } } = await supabase.auth.getUser();
-
-    // Validation: Check for active session if editing
-    if (gig.id) {
-        const { data: session } = await supabase
-            .from('gig_sessions')
-            .select('id')
-            .eq('gig_id', gig.id)
-            .eq('is_active', true)
-            .maybeSingle();
-        if (session) throw new Error("Cannot edit gig while a performance session is active.");
-    }
-
-    if (!gig.start_time) throw new Error("Start time is required");
-
-    const gigData = {
-        name: gig.name,
-        start_time: gig.start_time,
-        end_time: gig.end_time,
-        notes: gig.notes,
-        setlist_id: gig.setlist_id,
-        venue_name: gig.venue_name,
-        address: gig.address,
-        city: gig.city,
-        state: gig.state,
-        zip: gig.zip,
-        // Only set created_by on insert
-        ...(gig.id ? {} : { created_by: user?.id })
-    };
-
-    if (gig.id) {
-        const { data, error } = await supabase.from('gigs').update(gigData).eq('id', gig.id).select().single();
-        if (error) {
-            console.error("Update Gig Error:", error);
-            throw new Error(error.message || "Failed to update gig");
-        }
-        return data;
-    } else {
-        const { data, error } = await supabase.from('gigs').insert(gigData).select().single();
-        if (error) {
-            console.error("Insert Gig Error:", error);
-            throw new Error(error.message || "Failed to create gig");
-        }
-        return data;
-    }
-};
-
-export const cancelGig = async (id: string, reason?: string) => {
-    const { data: session } = await supabase
-        .from('gig_sessions')
-        .select('id')
-        .eq('gig_id', id)
-        .eq('is_active', true)
-        .maybeSingle();
-        
-    if (session) throw new Error("Cannot cancel gig while a performance session is active.");
-
-    const { error } = await supabase
-        .from('gigs')
-        .update({ 
-            cancelled_at: new Date().toISOString(),
-            cancellation_reason: reason || null
-        })
-        .eq('id', id);
-        
-    if (error) throw error;
-};
-
-export const deleteGig = async (id: string) => {
-    const { data: { user } } = await supabase.auth.getUser();
-    
-    const { data: session } = await supabase
-        .from('gig_sessions')
-        .select('id')
-        .eq('gig_id', id)
-        .eq('is_active', true)
-        .maybeSingle();
-        
-    if (session) throw new Error("Cannot delete gig while a performance session is active.");
-
-    // Soft delete
-    const { error } = await supabase
-        .from('gigs')
-        .update({ 
-            deleted_at: new Date().toISOString(),
-            deleted_by: user?.id 
-        })
-        .eq('id', id);
-        
-    if (error) throw error;
-};
-
-export const searchVenues = async (query: string) => {
-    const { data, error } = await supabase.functions.invoke('search-venue', {
-        body: { query }
-    });
-    
-    if (error) throw error;
-    return data?.items || [];
-};
-
-export const addSkippedSong = async (gigId: string, songId: string) => {
-    const { error } = await supabase.from('gig_skipped_songs').insert({ gig_id: gigId, song_id: songId });
-    if (error) throw error;
-};
-
-export const getSkippedSongs = async (gigId: string): Promise<Song[]> => {
-    const { data, error } = await supabase
-        .from('gig_skipped_songs')
-        .select('song:songs(*)')
-        .eq('gig_id', gigId)
-        .order('created_at', { ascending: true });
-    
-    if (error) throw error;
-    return data.map((d: any) => d.song) as Song[];
-};
-
-export const getAllSkippedSongs = async () => {
-    const { data, error } = await supabase
-        .from('gig_skipped_songs')
-        .select('*, song:songs(*)')
-        .order('created_at', { ascending: true });
-    
-    if (error) throw error;
-    return data;
-};
-
-export const removeSkippedSong = async (gigId: string, songId: string) => {
-    const { error } = await supabase.from('gig_skipped_songs').delete().match({ gig_id: gigId, song_id: songId });
-    if (error) throw error;
-};
-
-
-// --- Setlists ---
-
-// Note: This full fetch might be redundant with SyncEngine, but kept for non-synced fallbacks or admin views
-export const getSetlists = async (): Promise<Setlist[]> => {
-  const { data, error } = await supabase
-    .from('setlists')
-    .select(`*, sets (*, set_songs (*, song:songs (*)))`)
-    .is('deleted_at', null)
-    .order('name', { ascending: true });
-
-  if (error) throw error;
-
-  const rawSetlists = data as any[];
-
-  return rawSetlists.map(list => ({
-    ...list,
-    sets: list.sets
-      .filter((s: any) => !s.deleted_at) // Filter deleted sets
-      .sort((a: any, b: any) => a.position - b.position)
-      .map((set: any) => ({
-        id: set.id,
-        name: set.name,
-        position: set.position,
-        created_by: undefined,
-        songs: set.set_songs
-          .filter((ss: any) => !ss.deleted_at) // Filter deleted set_songs
-          .sort((a: any, b: any) => a.position - b.position)
-          .map((ss: any) => ({
-            id: ss.id,
-            position: ss.position,
-            songId: ss.song_id,
-            song: ss.song || undefined 
-          }))
-      }))
-  }));
-};
-
-export const getSetlist = async (id: string): Promise<Setlist | null> => {
-  const { data, error } = await supabase
-    .from('setlists')
-    .select(`*, sets (*, set_songs (*, song:songs (*)))`)
-    .eq('id', id)
-    .is('deleted_at', null)
-    .single();
-
-  if (error) return null;
-  const list = data as any;
-
-  return {
-    ...list,
-    sets: list.sets
-      .filter((s: any) => !s.deleted_at)
-      .sort((a: any, b: any) => a.position - b.position)
-      .map((set: any) => ({
-        id: set.id,
-        name: set.name,
-        position: set.position,
-        songs: set.set_songs
-          .filter((ss: any) => !ss.deleted_at)
-          .sort((a: any, b: any) => a.position - b.position)
-          .map((ss: any) => ({
-            id: ss.id,
-            position: ss.position,
-            songId: ss.song_id,
-            song: ss.song || undefined
-          }))
-      }))
-  };
-};
-
-export const getSetlistUsage = async (setlistId: string): Promise<Gig[]> => {
-    const { data, error } = await supabase
-        .from('gigs')
-        .select('*')
-        .eq('setlist_id', setlistId)
-        .is('deleted_at', null);
-    if (error) throw error;
-    return data as Gig[];
-};
-
-export const createSetlist = async (name: string, isPersonal: boolean = false, isDefault: boolean = false) => {
-  const { data: { user } } = await supabase.auth.getUser();
-  
-  if (isDefault) {
-      await supabase.from('setlists').update({ is_default: false }).eq('is_default', true);
+export const saveGig = async (bandId: string, gig: Partial<Gig>): Promise<Gig> => {
+  if (gig.id) {
+    return apiPut<Gig>(`/api/bands/${bandId}/gigs/${gig.id}`, gig);
   }
-
-  const { data, error } = await supabase
-    .from('setlists')
-    .insert({ 
-        name, 
-        date: new Date().toISOString().split('T')[0], 
-        is_tbd: false,
-        created_by: user?.id,
-        is_personal: isPersonal,
-        is_default: isDefault
-    })
-    .select()
-    .single();
-    
-  if (error) throw error;
-  return data;
+  return apiPost<Gig>(`/api/bands/${bandId}/gigs`, gig);
 };
 
-export const updateSetlist = async (id: string, updates: Partial<Setlist>) => {
-  const { data: gigsUsingSetlist } = await supabase
-    .from('gigs')
-    .select('id')
-    .eq('setlist_id', id)
-    .is('deleted_at', null);
+export const cancelGig = (bandId: string, id: string, reason?: string) =>
+  apiPost(`/api/bands/${bandId}/gigs/${id}/cancel`, { reason });
 
-  if (gigsUsingSetlist && gigsUsingSetlist.length > 0) {
-      const gigIds = gigsUsingSetlist.map(g => g.id);
-      const { data: session } = await supabase
-        .from('gig_sessions')
-        .select('id')
-        .in('gig_id', gigIds)
-        .eq('is_active', true)
-        .maybeSingle();
-      if (session) throw new Error("Cannot edit setlist while it is being used in an active performance.");
+export const deleteGig = (bandId: string, id: string) =>
+  apiDel(`/api/bands/${bandId}/gigs/${id}`);
+
+export const searchVenues = (query: string) =>
+  apiGet<any[]>(`/api/venues/search?q=${encodeURIComponent(query)}`);
+
+// ── Skipped Songs ─────────────────────────────────────────────────
+
+export const addSkippedSong = (bandId: string, gigId: string, songId: string) =>
+  apiPost(`/api/bands/${bandId}/gigs/${gigId}/skipped-songs`, { song_id: songId });
+
+export const getSkippedSongs = (bandId: string, gigId: string) =>
+  apiGet<Song[]>(`/api/bands/${bandId}/gigs/${gigId}/skipped-songs`);
+
+export const getAllSkippedSongs = (bandId: string) =>
+  apiGet<any[]>(`/api/bands/${bandId}/gigs/skipped-songs`);
+
+export const removeSkippedSong = (bandId: string, gigId: string, songId: string) =>
+  apiDel(`/api/bands/${bandId}/gigs/${gigId}/skipped-songs/${songId}`);
+
+// ── Setlists ──────────────────────────────────────────────────────
+
+export const getSetlists = (bandId: string) =>
+  apiGet<Setlist[]>(`/api/bands/${bandId}/setlists`);
+
+export const getSetlist = (bandId: string, id: string) =>
+  apiGet<Setlist | null>(`/api/bands/${bandId}/setlists/${id}`);
+
+export const getSetlistUsage = (bandId: string, setlistId: string) =>
+  apiGet<Gig[]>(`/api/bands/${bandId}/setlists/${setlistId}/usage`);
+
+export const createSetlist = (bandId: string, name: string, isPersonal = false, isDefault = false) =>
+  apiPost<Setlist>(`/api/bands/${bandId}/setlists`, { name, is_personal: isPersonal, is_default: isDefault });
+
+export const updateSetlist = (bandId: string, id: string, updates: Partial<Setlist>) =>
+  apiPut<Setlist>(`/api/bands/${bandId}/setlists/${id}`, updates);
+
+export const deleteSetlist = (bandId: string, id: string) =>
+  apiDel(`/api/bands/${bandId}/setlists/${id}`);
+
+export const cloneSetlist = (bandId: string, sourceId: string, newName: string, isPersonal: boolean) =>
+  apiPost<{ id: string }>(`/api/bands/${bandId}/setlists/${sourceId}/clone`, { name: newName, is_personal: isPersonal });
+
+export const convertSetlistToBand = (bandId: string, id: string) =>
+  apiPatch(`/api/bands/${bandId}/setlists/${id}`, { is_personal: false });
+
+export const syncSetlist = (bandId: string, setlist: Setlist) =>
+  apiPost(`/api/bands/${bandId}/setlists/${setlist.id}/sync`, setlist);
+
+// ── Gig Sessions ──────────────────────────────────────────────────
+
+export const getGigSession = (bandId: string, gigId: string) =>
+  apiGet<GigSession | null>(`/api/bands/${bandId}/gig-sessions?gig_id=${gigId}`);
+
+export const getAllGigSessions = (bandId: string) =>
+  apiGet<any[]>(`/api/bands/${bandId}/gig-sessions`);
+
+export const createGigSession = (bandId: string, gigId: string, leaderId: string) =>
+  apiPost<GigSession>(`/api/bands/${bandId}/gig-sessions`, { gig_id: gigId, leader_id: leaderId });
+
+export const endGigSession = (bandId: string, sessionId: string) =>
+  apiDel(`/api/bands/${bandId}/gig-sessions/${sessionId}`);
+
+export const endAllSessions = (bandId: string) =>
+  apiPost(`/api/bands/${bandId}/gig-sessions/end-all`);
+
+export const cleanupStaleSessions = (bandId: string) =>
+  apiPost(`/api/bands/${bandId}/gig-sessions/cleanup`);
+
+export const joinGigSession = (bandId: string, sessionId: string) =>
+  apiPost(`/api/bands/${bandId}/gig-sessions/${sessionId}/join`);
+
+export const leaveGigSession = (bandId: string, sessionId: string) =>
+  apiPost(`/api/bands/${bandId}/gig-sessions/${sessionId}/leave`);
+
+export const sendHeartbeat = (bandId: string, sessionId: string, isLeader: boolean) =>
+  apiPost(`/api/bands/${bandId}/gig-sessions/${sessionId}/heartbeat`, { is_leader: isLeader });
+
+export const updateSessionState = (
+  bandId: string,
+  sessionId: string,
+  state: {
+    current_set_index?:  number;
+    current_song_index?: number;
+    adhoc_song_id?:      string | null;
+    is_on_break?:        boolean;
   }
+) => apiPatch(`/api/bands/${bandId}/gig-sessions/${sessionId}`, state);
 
-  if (updates.is_default) {
-       await supabase.from('setlists').update({ is_default: false }).eq('is_default', true);
-  }
+export const requestLeadership = (bandId: string, sessionId: string) =>
+  apiPost(`/api/bands/${bandId}/gig-sessions/${sessionId}/request-leadership`);
 
-  const { data, error } = await supabase
-    .from('setlists')
-    .update(updates)
-    .eq('id', id)
-    .select()
-    .single();
+export const resolveLeadershipRequest = (bandId: string, requestId: string, status: 'approved' | 'denied') =>
+  apiPost(`/api/bands/${bandId}/gig-sessions/leadership-requests/${requestId}/resolve`, { status });
 
-  if (error) throw error;
-  return data;
+export const forceLeadership = (bandId: string, sessionId: string, userId: string) =>
+  apiPost(`/api/bands/${bandId}/gig-sessions/${sessionId}/force-leadership`, { user_id: userId });
+
+// ── Delta fetch helper (used by legacy code paths) ────────────────
+
+export const fetchDeltas = async (bandId: string, table: string, lastVersion: number) => {
+  const res = await apiGet<any>(`/api/sync/delta?band_id=${bandId}&since_version=${lastVersion}`);
+  return (res as any)?.[table] ?? [];
 };
 
-// --- Sync Logic (Legacy/Transaction for Setlist Editor) ---
+// ── Band management ───────────────────────────────────────────────
 
-export const syncSetlist = async (setlist: Setlist) => {
-    const { data: { user } } = await supabase.auth.getUser();
-    
-    // 1. Update Metadata
-    await supabase.from('setlists').update({ name: setlist.name }).eq('id', setlist.id);
+export const createBand = (name: string, description?: string) =>
+  apiPost<{ id: string; name: string; join_code: string }>('/api/bands', { name, description });
 
-    // --- Sets Handling ---
-    const { data: dbSets } = await supabase
-        .from('sets')
-        .select('id')
-        .eq('setlist_id', setlist.id)
-        .is('deleted_at', null); // Look at active sets
+export const joinBand = (joinCode: string) =>
+  apiPost<{ bandId: string }>('/api/bands/join', { joinCode });
 
-    const existingSetIds = new Set(dbSets?.map(s => s.id) || []);
-    const incomingSetIds = new Set(setlist.sets.filter(s => !s.id.startsWith('temp-')).map(s => s.id));
-    
-    // 1.1 Delete Sets (Soft Delete)
-    const setsToDelete = [...existingSetIds].filter(id => !incomingSetIds.has(id));
-    if (setsToDelete.length > 0) {
-        await supabase.from('sets').update({
-            deleted_at: new Date().toISOString(),
-            deleted_by: user?.id
-        }).in('id', setsToDelete);
-    }
+export const getBand = (bandId: string) =>
+  apiGet<{ id: string; name: string; description: string | null; join_code: string }>(`/api/bands/${bandId}`);
 
-    // 1.2 Update Existing Sets
-    const setsToUpdate = setlist.sets
-        .filter(s => !s.id.startsWith('temp-'))
-        .map(s => ({
-            id: s.id,
-            name: s.name,
-            position: s.position,
-            setlist_id: setlist.id 
-        }));
-    
-    if (setsToUpdate.length > 0) {
-        const { error } = await supabase.from('sets').upsert(setsToUpdate);
-        if (error) throw error;
-    }
+export const updateBand = (bandId: string, updates: { name?: string; description?: string }) =>
+  apiPatch<void>(`/api/bands/${bandId}`, updates);
 
-    // 1.3 Insert New Sets
-    const setsToInsert = setlist.sets.filter(s => s.id.startsWith('temp-'));
-    const tempSetIdMap: Record<string, string> = {};
+export const getBandMembers = (bandId: string) =>
+  apiGet<import('@/types').BandMembership[]>(`/api/bands/${bandId}/members`);
 
-    for (const set of setsToInsert) {
-        const { data, error } = await supabase.from('sets').insert({
-            name: set.name,
-            position: set.position,
-            setlist_id: setlist.id,
-            created_by: user?.id
-        }).select('id').single();
-        
-        if (error) throw error;
-        tempSetIdMap[set.id] = data.id;
-    }
+export const getPendingMembers = (bandId: string) =>
+  apiGet<import('@/types').BandMembership[]>(`/api/bands/${bandId}/members/pending`);
 
-    // --- Songs Handling ---
-    const validSetIds = [
-        ...setsToUpdate.map(s => s.id),
-        ...Object.values(tempSetIdMap)
-    ];
+export const approveMember = (bandId: string, membershipId: string) =>
+  apiPost<void>(`/api/bands/${bandId}/members/${membershipId}/approve`);
 
-    const { data: dbSongs } = await supabase
-        .from('set_songs')
-        .select('id')
-        .in('set_id', validSetIds)
-        .is('deleted_at', null);
+export const denyMember = (bandId: string, membershipId: string) =>
+  apiPost<void>(`/api/bands/${bandId}/members/${membershipId}/deny`);
 
-    const existingSongIds = new Set(dbSongs?.map(s => s.id) || []);
-    
-    const incomingSongIds = new Set<string>();
-    const songsToUpdate: any[] = [];
-    const songsToInsert: any[] = [];
+export const updateMemberRole = (bandId: string, userId: string, role: import('@/types').BandRole, position?: string) =>
+  apiPatch<void>(`/api/bands/${bandId}/members/${userId}`, { role, position });
 
-    setlist.sets.forEach(set => {
-        const realSetId = set.id.startsWith('temp-') ? tempSetIdMap[set.id] : set.id;
-        
-        set.songs.forEach(song => {
-            if (!song.id.startsWith('temp-')) {
-                incomingSongIds.add(song.id);
-                // Update
-                songsToUpdate.push({
-                    id: song.id,
-                    set_id: realSetId,
-                    song_id: song.songId,
-                    position: song.position
-                });
-            } else {
-                // Insert
-                songsToInsert.push({
-                    set_id: realSetId,
-                    song_id: song.songId,
-                    position: song.position,
-                    created_by: user?.id
-                });
-            }
-        });
-    });
+export const removeMember = (bandId: string, userId: string) =>
+  apiDel(`/api/bands/${bandId}/members/${userId}`);
 
-    // 2.1 Delete Removed Songs (Soft Delete)
-    const songsToDelete = [...existingSongIds].filter(id => !incomingSongIds.has(id));
-    if (songsToDelete.length > 0) {
-        await supabase.from('set_songs').update({
-            deleted_at: new Date().toISOString(),
-            deleted_by: user?.id
-        }).in('id', songsToDelete);
-    }
+export const regenerateJoinCode = (bandId: string) =>
+  apiPost<{ joinCode: string }>(`/api/bands/${bandId}/regenerate-code`);
 
-    // 2.2 Update Existing Songs
-    if (songsToUpdate.length > 0) {
-        const tempUpdates = songsToUpdate.map(s => ({ ...s, position: s.position + 10000 }));
-        await supabase.from('set_songs').upsert(tempUpdates);
-        const { error: finalError } = await supabase.from('set_songs').upsert(songsToUpdate);
-        if (finalError) throw finalError;
-    }
-
-    // 2.3 Insert New Songs
-    if (songsToInsert.length > 0) {
-        const { error } = await supabase.from('set_songs').insert(songsToInsert);
-        if (error) throw error;
-    }
-};
-
-export const convertSetlistToBand = async (id: string) => {
-    const { error } = await supabase.from('setlists').update({ is_personal: false }).eq('id', id);
-    if (error) throw error;
-};
-
-export const cloneSetlist = async (sourceId: string, newName: string, isPersonal: boolean) => {
-  const user = (await supabase.auth.getUser()).data.user;
-  if (!user) throw new Error("No user");
-
-  const { data, error } = await supabase.rpc('clone_setlist', {
-    source_setlist_id: sourceId,
-    new_name: newName,
-    new_date: new Date().toISOString().split('T')[0],
-    is_personal_copy: isPersonal,
-    owner_id: user.id
-  });
-
-  if (error) throw error;
-  return { id: data };
-};
-
-export const deleteSetlist = async (id: string) => {
-  const { data: { user } } = await supabase.auth.getUser();
-  // Soft Delete
-  const { error } = await supabase
-    .from('setlists')
-    .update({ 
-        deleted_at: new Date().toISOString(),
-        deleted_by: user?.id
-    })
-    .eq('id', id);
-  if (error) throw error;
-};
-
-// --- Gig Sessions ---
-
-export const getGigSession = async (gigId: string): Promise<GigSession | null> => {
-    const { data, error } = await supabase
-        .from('gig_sessions')
-        .select('*')
-        .eq('gig_id', gigId)
-        .maybeSingle();
-    if (error && error.code !== 'PGRST116') throw error;
-    return data;
-};
-
-export const getAllGigSessions = async () => {
-    const { data, error } = await supabase
-        .from('gig_sessions')
-        .select(`
-            *, 
-            gig:gigs(name), 
-            leader:profiles!gig_sessions_leader_id_fkey(first_name, last_name),
-            participants:gig_session_participants(
-                profile:profiles(first_name, last_name)
-            )
-        `)
-        .eq('is_active', true)
-        .order('started_at', { ascending: false });
-    
-    if (error) throw error;
-    return data;
-};
-
-export const createGigSession = async (gigId: string, leaderId: string): Promise<GigSession> => {
-    const { data: existing } = await supabase
-        .from('gig_sessions')
-        .select('*')
-        .eq('gig_id', gigId);
-    
-    if (existing && existing.length > 0) {
-        // Hard Delete old sessions
-        const idsToDelete = existing.map(s => s.id);
-        await supabase.from('gig_sessions').delete().in('id', idsToDelete);
-    }
-
-    const { data, error } = await supabase
-        .from('gig_sessions')
-        .insert({ gig_id: gigId, leader_id: leaderId })
-        .select()
-        .single();
-    if (error) throw error;
-    return data;
-};
-
-export const endGigSession = async (sessionId: string) => {
-    // Hard delete session (cascades to participants via DB FK if set, but we explicit delete to be safe/sure per request)
-    // Deleting the session should cascade, but let's just delete the session row directly.
-    const { error } = await supabase.from('gig_sessions').delete().eq('id', sessionId);
-    if (error) throw error;
-};
-
-export const endAllSessions = async () => {
-    // Admin only function - Hard delete all active sessions
-    await supabase.from('gig_sessions').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-};
-
-export const cleanupStaleSessions = async () => {
-    await supabase.rpc('cleanup_stale_gig_sessions');
-};
-
-export const joinGigSession = async (sessionId: string, userId: string) => {
-    const { error } = await supabase.from('gig_session_participants')
-        .upsert({ session_id: sessionId, user_id: userId, last_seen: new Date().toISOString() }, { onConflict: 'session_id,user_id' });
-    if (error) throw error;
-};
-
-export const leaveGigSession = async (sessionId: string, userId: string) => {
-    // Hard delete participant
-    const { error } = await supabase.from('gig_session_participants')
-        .delete()
-        .eq('session_id', sessionId)
-        .eq('user_id', userId);
-    if (error) throw error;
-};
-
-export const sendHeartbeat = async (sessionId: string, userId: string, isLeader: boolean) => {
-    await supabase.from('gig_session_participants')
-        .update({ last_seen: new Date().toISOString() })
-        .eq('session_id', sessionId)
-        .eq('user_id', userId);
-
-    if (isLeader) {
-        await supabase.from('gig_sessions')
-            .update({ last_heartbeat: new Date().toISOString() })
-            .eq('id', sessionId);
-    }
-};
-
-export const updateSessionState = async (sessionId: string, state: { current_set_index?: number, current_song_index?: number, adhoc_song_id?: string | null, is_on_break?: boolean }) => {
-    const { error } = await supabase.from('gig_sessions').update(state).eq('id', sessionId);
-    if (error) {
-        console.error("Failed to update session state", error);
-        throw error;
-    }
-};
-
-export const requestLeadership = async (sessionId: string, userId: string) => {
-    await supabase.from('leadership_requests').insert({ session_id: sessionId, requester_id: userId });
-};
-
-export const resolveLeadershipRequest = async (requestId: string, status: 'approved' | 'denied') => {
-    await supabase.from('leadership_requests').update({ status }).eq('id', requestId);
-};
-
-export const forceLeadership = async (sessionId: string, userId: string) => {
-    await supabase.from('gig_sessions').update({ leader_id: userId, last_heartbeat: new Date().toISOString() }).eq('id', sessionId);
-};
+export const leaveBand = (bandId: string, userId: string) =>
+  apiDel(`/api/bands/${bandId}/members/${userId}`);

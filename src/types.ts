@@ -1,11 +1,70 @@
+// ---------------------------------------------------------------
+// Platform-level roles (on the user account, not per-band)
+// ---------------------------------------------------------------
+export type PlatformRole = 'user' | 'platform_admin' | 'platform_support';
+
+// ---------------------------------------------------------------
+// Band-level roles (per band_membership row)
+// ---------------------------------------------------------------
+export type BandRole = 'owner' | 'manager' | 'member';
+
+// ---------------------------------------------------------------
+// Band (the multi-tenant unit)
+// ---------------------------------------------------------------
+export interface Band {
+  id: string;
+  name: string;
+  description?: string | null;
+  join_code: string;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+  deleted_at?: string | null;
+}
+
+// ---------------------------------------------------------------
+// Band membership (user ↔ band join with per-band role)
+// ---------------------------------------------------------------
+export interface BandMembership {
+  id: string;
+  band_id: string;
+  user_id: string;
+  role: BandRole;
+  position: string | null;
+  is_approved: boolean;
+  invited_by: string | null;
+  joined_at: string | null;
+  created_at: string;
+  updated_at: string;
+  deleted_at?: string | null;
+  // Hydrated fields
+  user?: Pick<Profile, 'id' | 'first_name' | 'last_name' | 'email' | 'avatar_url'>;
+}
+
+// ---------------------------------------------------------------
+// Band ban
+// ---------------------------------------------------------------
+export interface BandBan {
+  id: string;
+  band_id: string;
+  user_id: string;
+  banned_by: string;
+  reason: string | null;
+  banned_at: string;
+}
+
+// ---------------------------------------------------------------
+// Song
+// ---------------------------------------------------------------
 export interface Song {
   id: string;
+  band_id: string;
   artist: string;
   title: string;
   lyrics: string;
   key: string;
   tempo: string;
-  duration: string; // "MM:SS" format
+  duration: string;
   note: string;
   cover_url?: string;
   spotify_url?: string;
@@ -19,23 +78,29 @@ export interface Song {
   version: number;
 }
 
+// ---------------------------------------------------------------
+// SetSong
+// ---------------------------------------------------------------
 export interface SetSong {
   id: string;
+  band_id: string;
   position: number;
   songId: string;
-  // Included for raw DB compatibility
   song_id?: string;
   set_id: string;
-  
-  song?: Song; // Hydrated song data
+  song?: Song;
   created_by?: string;
   deleted_at?: string | null;
   deleted_by?: string | null;
   version: number;
 }
 
+// ---------------------------------------------------------------
+// Set
+// ---------------------------------------------------------------
 export interface Set {
   id: string;
+  band_id: string;
   name: string;
   position: number;
   setlist_id: string;
@@ -46,8 +111,12 @@ export interface Set {
   version: number;
 }
 
+// ---------------------------------------------------------------
+// Setlist
+// ---------------------------------------------------------------
 export interface Setlist {
   id: string;
+  band_id: string;
   name: string;
   is_personal: boolean;
   is_default: boolean;
@@ -61,14 +130,18 @@ export interface Setlist {
   version: number;
 }
 
+// ---------------------------------------------------------------
+// Gig
+// ---------------------------------------------------------------
 export interface Gig {
   id: string;
+  band_id: string;
   name: string;
   start_time: string;
   end_time: string | null;
   notes: string;
   setlist_id: string | null;
-  setlist?: Setlist;
+  setlist?: Pick<Setlist, 'id' | 'name'>;
   venue_name?: string;
   address?: string;
   city?: string;
@@ -83,8 +156,12 @@ export interface Gig {
   version: number;
 }
 
+// ---------------------------------------------------------------
+// Gig Session
+// ---------------------------------------------------------------
 export interface GigSession {
   id: string;
+  band_id: string;
   gig_id: string;
   leader_id: string;
   current_set_index: number;
@@ -98,42 +175,52 @@ export interface GigSession {
   version: number;
 }
 
+// ---------------------------------------------------------------
+// Gig Session Participant
+// ---------------------------------------------------------------
 export interface GigSessionParticipant {
   id: string;
+  band_id: string;
   session_id: string;
   user_id: string;
   last_seen: string;
   profile?: {
-    first_name: string;
-    last_name: string;
-    position: string;
+    first_name: string | null;
+    last_name: string | null;
+    position: string | null;
     email?: string | null;
   };
   version: number;
 }
 
-export type UserRole = 'admin' | 'manager' | 'standard';
-
+// ---------------------------------------------------------------
+// User preferences
+// ---------------------------------------------------------------
 export interface UserPreferences {
   tempo_blinker_enabled?: boolean;
-  tempo_blinker_color?: string; // 'red', 'green', 'blue', 'amber'
+  tempo_blinker_color?: string;
   performance_view?: 'full' | 'simple';
   metronome_click_sound?: 'click1' | 'click2' | 'click3' | 'click4' | 'click5';
 }
 
+// ---------------------------------------------------------------
+// Profile — represents the authenticated user
+// In the new design, profile fields come from the BetterAuth `user` table
+// Band-specific role/position comes from the active BandMembership
+// ---------------------------------------------------------------
 export interface Profile {
   id: string;
   email?: string | null;
   first_name: string | null;
   last_name: string | null;
-  position: string | null;
-  role: UserRole;
-  is_approved: boolean;
-  is_active: boolean;
-  has_password: boolean;
   avatar_url?: string;
+  platform_role: PlatformRole;
+  is_active: boolean;
   preferences?: UserPreferences;
   deleted_at?: string | null;
-  deleted_by?: string | null;
-  version: number;
 }
+
+// ---------------------------------------------------------------
+// Legacy alias — keeps old code working during migration
+// ---------------------------------------------------------------
+export type UserRole = BandRole;

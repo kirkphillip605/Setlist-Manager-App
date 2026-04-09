@@ -1,26 +1,14 @@
-import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/context/AuthContext";
+import { useAuth } from '@/context/AuthContext';
+
+// With BetterAuth, the profile is derived directly from the session user.
+// This hook provides a react-query-compatible interface for backwards compat.
 
 export const useProfile = () => {
-  const { session } = useAuth();
-  const userId = session?.user?.id;
-
-  return useQuery({
-    queryKey: ['profile', userId],
-    queryFn: async () => {
-      if (!userId) return null;
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .single();
-      
-      if (error) throw error;
-      return data;
-    },
-    enabled: !!userId,
-    staleTime: Infinity, // Cache profile indefinitely until reload/invalidation
-    gcTime: Infinity,
-  });
+  const { profile, loading } = useAuth();
+  return {
+    data:       profile,
+    isLoading:  loading,
+    isError:    false,
+    refetch:    () => {},
+  };
 };

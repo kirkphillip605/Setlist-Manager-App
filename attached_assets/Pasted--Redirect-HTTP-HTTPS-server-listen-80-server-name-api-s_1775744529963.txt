@@ -1,0 +1,61 @@
+# Redirect HTTP → HTTPS
+server {
+    listen 80;
+    server_name api.setlist.kirknet.io setlist.kirknet.io;
+
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+# API + WebSocket server
+server {
+    listen 443 ssl http2;
+    server_name api.setlist.kirknet.io;
+    ssl_certificate /etc/letsencrypt/live/api.setlist.kirknet.io/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/api.setlist.kirknet.io/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
+    # WebSocket support — critical for real-time sync and gig sessions
+    location / {
+        proxy_pass http://127.0.0.1:3001;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 86400s;
+        proxy_send_timeout 86400s;
+    }
+}
+# Main domain — universal links + join URLs + auth verification
+server {
+    listen 443 ssl http2;
+    server_name setlist.kirknet.io;
+    ssl_certificate /etc/letsencrypt/live/setlist.kirknet.io/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/setlist.kirknet.io/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
+    root /var/www/setlistpro;
+    index index.html;
+    # iOS Universal Links — served from the Hono backend
+    location /.well-known/apple-app-site-association {
+        proxy_pass http://127.0.0.1:3001;
+        proxy_set_header Host $host;
+    }
+    # Android App Links — served from the Hono backend
+    location /.well-known/assetlinks.json {
+        proxy_pass http://127.0.0.1:3001;
+        proxy_set_header Host $host;
+    }
+    # All other routes — serve the PWA's index.html (client-side routing)
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+}

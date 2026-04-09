@@ -6,7 +6,7 @@ import { useNavigate, useParams, Link } from "react-router-dom";
 import { toast } from "sonner";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useMetronome } from "@/components/MetronomeContext";
-import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/context/AuthContext";
 import { useEffect, useState, useRef } from "react";
 import { searchMusic, fetchAudioFeatures } from "@/lib/musicApi";
 import { motion } from "framer-motion";
@@ -58,7 +58,7 @@ const SongDetail = () => {
   const isOnline = useNetworkStatus();
   const { openMetronome, closeMetronome, isPlaying, bpm, isOpen } = useMetronome();
   
-  const [isAdmin, setIsAdmin] = useState(false);
+  const { isAdmin } = useAuth();
   const [isFetchingDetails, setIsFetchingDetails] = useState(false);
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -74,16 +74,6 @@ const SongDetail = () => {
   const [detectedBpm, setDetectedBpm] = useState<number | null>(null);
   const wasMetronomeOpen = useRef(false);
 
-  useEffect(() => {
-    const checkAdmin = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        const { data } = await supabase.from('profiles').select('role').eq('id', user.id).single();
-        setIsAdmin(data?.role === 'admin');
-      }
-    };
-    checkAdmin();
-  }, []);
 
   // Use cached song data instead of network request
   const song = useSongFromCache(id);
