@@ -101,8 +101,14 @@ app.patch('/me', requireAuth,
     const [current] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
     const finalFirstName = (body.first_name ?? current?.firstName) || null;
     const finalLastName  = (body.last_name  ?? current?.lastName)  || null;
+
     if (finalFirstName && finalLastName && !current?.isProfileComplete) {
-      updates.isProfileComplete = true;
+      const userAccounts = await db.select({ providerId: accounts.providerId })
+        .from(accounts).where(eq(accounts.userId, userId));
+      const hasCredential = userAccounts.some(a => a.providerId === 'credential');
+      if (hasCredential) {
+        updates.isProfileComplete = true;
+      }
     }
 
     const [user] = await db.update(users).set(updates).where(eq(users.id, userId)).returning();
@@ -119,6 +125,32 @@ app.patch('/me', requireAuth,
     });
   }
 );
+
+app.post('/me/complete-profile', requireAuth, async (c) => {
+  const userId = c.get('userId');
+  const [current] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+  if (!current) return c.json({ error: 'User not found' }, 404);
+
+  if (!current.firstName || !current.lastName) {
+    return c.json({ error: 'Name fields are required', code: 'MISSING_NAME' }, 400);
+  }
+
+  const userAccounts = await db.select({ providerId: accounts.providerId })
+    .from(accounts).where(eq(accounts.userId, userId));
+  const hasCredential = userAccounts.some(a => a.providerId === 'credential');
+  if (!hasCredential) {
+    return c.json({ error: 'Password is required before completing profile', code: 'MISSING_PASSWORD' }, 400);
+  }
+
+  const [user] = await db.update(users)
+    .set({ isProfileComplete: true, updatedAt: new Date() })
+    .where(eq(users.id, userId))
+    .returning();
+
+  return c.json({
+    is_profile_complete: user.isProfileComplete,
+  });
+});
 
 // POST /api/users/me/reassign-phone — reassign verified phone number from another user
 // This should only be called AFTER the phone has been verified via BetterAuth's phone OTP flow.

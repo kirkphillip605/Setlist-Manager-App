@@ -71,9 +71,7 @@ const ProtectedRoute = ({ children, requireBand = true }: { children: JSX.Elemen
     return children;
   }
 
-  const isProfileComplete = profile?.is_profile_complete || (profile && profile.first_name && profile.last_name);
-
-  if (!isProfileComplete) {
+  if (!profile?.is_profile_complete) {
     if (location.pathname !== '/onboarding') return <Navigate to="/onboarding" replace />;
     return children;
   }
@@ -86,7 +84,7 @@ const ProtectedRoute = ({ children, requireBand = true }: { children: JSX.Elemen
 
   // Redirect away from special pages once conditions are met
   if (location.pathname === '/reactivate' && profile?.is_active) return <Navigate to="/" replace />;
-  if (location.pathname === '/onboarding' && isProfileComplete)   return <Navigate to="/" replace />;
+  if (location.pathname === '/onboarding' && profile?.is_profile_complete) return <Navigate to="/" replace />;
   if (location.pathname === '/bands/setup' && !noBands)           return <Navigate to="/" replace />;
 
   return <DataHydration>{children}</DataHydration>;

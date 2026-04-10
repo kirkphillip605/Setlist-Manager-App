@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { updateUserProfile, setInitialPassword } from '@/lib/authClient';
-import { apiGet, apiPatch } from '@/lib/apiFetch';
+import { apiGet, apiPatch, apiPost } from '@/lib/apiFetch';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -52,10 +52,16 @@ const OnboardingWizard = () => {
     }
   }, [profile, user]);
 
-  const advanceAfterName = () => {
+  const advanceAfterName = async () => {
     if (providerInfo && !providerInfo.hasPassword) {
       setStep('password');
     } else {
+      try {
+        await apiPost('/api/users/me/complete-profile', {});
+        await refreshProfile();
+      } catch {
+        // May already be complete
+      }
       setStep('2fa-prompt');
     }
   };
@@ -68,11 +74,16 @@ const OnboardingWizard = () => {
     }
     setLoading(true);
     try {
-      await updateUserProfile({
+      const authResult = await updateUserProfile({
         name: `${firstName.trim()} ${lastName.trim()}`,
         firstName: firstName.trim(),
         lastName: lastName.trim(),
       });
+      if (authResult?.error) {
+        toast.error(authResult.error.message || 'Failed to update auth profile');
+        setLoading(false);
+        return;
+      }
 
       await apiPatch('/api/users/me', {
         first_name: firstName.trim(),
@@ -106,6 +117,9 @@ const OnboardingWizard = () => {
         setLoading(false);
         return;
       }
+
+      await apiPost('/api/users/me/complete-profile', {});
+      await refreshProfile();
       toast.success('Password set successfully');
       setStep('2fa-prompt');
     } catch (err) {
@@ -115,7 +129,13 @@ const OnboardingWizard = () => {
     }
   };
 
-  const handleSkip2FA = () => {
+  const handleSkip2FA = async () => {
+    try {
+      await apiPost('/api/users/me/complete-profile', {});
+      await refreshProfile();
+    } catch {
+      // Profile may already be complete
+    }
     navigate('/');
   };
 
@@ -172,10 +192,6 @@ const OnboardingWizard = () => {
                   ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   : <Lock className="mr-2 h-4 w-4" />}
                 Set Password
-              </Button>
-              <Button type="button" variant="ghost" size="sm" className="w-full" onClick={() => setStep('2fa-prompt')}>
-                Skip for now
-                <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
             </CardFooter>
           </form>
