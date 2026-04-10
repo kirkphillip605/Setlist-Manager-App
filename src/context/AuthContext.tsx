@@ -43,13 +43,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   useEffect(() => {
     let mounted = true;
-    const hasCookie = document.cookie.split(';').some(c =>
-      c.trim().startsWith('better-auth') || c.trim().startsWith('__Secure-better-auth')
-    );
-    if (!hasCookie) {
-      setIsPending(false);
-      return;
-    }
     authClient.getSession().then(({ data }) => {
       if (mounted) {
         setUser(data?.user ?? null);
