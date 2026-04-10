@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { authClient } from '@/lib/authClient';
+import { twoFactor } from '@/lib/authClient';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -33,7 +33,7 @@ const TwoFactorSetup = () => {
   const handleEnableTOTP = async () => {
     setLoading(true);
     try {
-      const result = await (authClient as any).twoFactor.enable({
+      const result = await twoFactor.enable({
         password: undefined,
       });
       if (result?.error) {
@@ -49,8 +49,8 @@ const TwoFactorSetup = () => {
         setBackupCodes(data.backupCodes);
       }
       setStep('totp-scan');
-    } catch (err: any) {
-      toast.error(err?.message ?? 'Failed to set up 2FA');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to set up 2FA');
     } finally {
       setLoading(false);
     }
@@ -64,7 +64,7 @@ const TwoFactorSetup = () => {
     }
     setLoading(true);
     try {
-      const result = await (authClient as any).twoFactor.verifyTotp({
+      const result = await twoFactor.verifyTotp({
         code: verifyCode,
       });
       if (result?.error) {
@@ -73,8 +73,8 @@ const TwoFactorSetup = () => {
         return;
       }
       setStep('recovery');
-    } catch (err: any) {
-      toast.error(err?.message ?? 'Verification failed');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Verification failed');
     } finally {
       setLoading(false);
     }

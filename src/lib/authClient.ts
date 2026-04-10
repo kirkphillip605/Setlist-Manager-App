@@ -19,6 +19,17 @@ const emailAndPasswordClient = () => ({
   }),
 });
 
+interface AdditionalUserFields {
+  firstName?: string | null;
+  lastName?: string | null;
+  phone?: string | null;
+  phoneVerified?: boolean;
+  platformRole?: string;
+  isActive?: boolean;
+  isProfileComplete?: boolean;
+  preferences?: string | Record<string, unknown>;
+}
+
 export const authClient = createAuthClient({
   baseURL: `${API_URL}/api/auth`,
   plugins: [
@@ -27,34 +38,68 @@ export const authClient = createAuthClient({
     emailOTPClient(),
     phoneNumberClient(),
     twoFactorClient(),
-    inferAdditionalFields<{
-      user: {
-        firstName?: string;
-        lastName?: string;
-        phone?: string;
-        phoneVerified?: boolean;
-        platformRole?: string;
-        isActive?: boolean;
-        isProfileComplete?: boolean;
-        preferences?: string;
-      };
-    }>(),
+    inferAdditionalFields<{ user: AdditionalUserFields }>(),
   ],
 });
 
 export type AuthSession = typeof authClient.$Infer.Session;
 export type AuthUser    = typeof authClient.$Infer.Session.user;
 
-export const mapAuthUserToProfile = (user: AuthUser): Profile => ({
-  id:                  user.id,
-  email:               user.email,
-  first_name:          (user as any).firstName ?? null,
-  last_name:           (user as any).lastName  ?? null,
-  avatar_url:          user.image ?? undefined,
-  platform_role:       ((user as any).platformRole ?? 'user') as Profile['platform_role'],
-  is_active:           (user as any).isActive ?? true,
-  is_profile_complete: (user as any).isProfileComplete ?? false,
-  preferences:         typeof (user as any).preferences === 'string'
-                         ? JSON.parse((user as any).preferences)
-                         : (user as any).preferences,
-});
+type UserWithFields = AuthUser & AdditionalUserFields;
+
+interface TwoFactorResult<T = Record<string, unknown>> {
+  data?: T | null;
+  error?: { message: string; status?: number } | null;
+}
+
+interface TwoFactorEnableData {
+  totpURI?: string;
+  backupCodes?: string[];
+}
+
+interface TwoFactorNamespace {
+  enable: (opts: { password?: string }) => Promise<TwoFactorResult<TwoFactorEnableData>>;
+  verifyTotp: (opts: { code: string }) => Promise<TwoFactorResult>;
+  verifyBackupCode: (opts: { code: string }) => Promise<TwoFactorResult>;
+}
+
+export const twoFactor: TwoFactorNamespace =
+  (authClient as unknown as { twoFactor: TwoFactorNamespace }).twoFactor;
+
+export const updateUserProfile = (fields: {
+  name?: string;
+  firstName?: string;
+  lastName?: string;
+  image?: string;
+}) => authClient.updateUser(fields as Parameters<typeof authClient.updateUser>[0]);
+
+export const changeUserPassword = (opts: {
+  currentPassword: string;
+  newPassword: string;
+  revokeOtherSessions?: boolean;
+}) => (authClient as unknown as {
+  changePassword: (o: typeof opts) => Promise<TwoFactorResult>;
+}).changePassword(opts);
+
+export const resetUserPassword = (opts: {
+  newPassword: string;
+}) => (authClient as unknown as {
+  updatePassword: (o: typeof opts) => Promise<TwoFactorResult>;
+}).updatePassword(opts);
+
+export const mapAuthUserToProfile = (user: AuthUser): Profile => {
+  const u = user as UserWithFields;
+  return {
+    id:                  u.id,
+    email:               u.email,
+    first_name:          u.firstName ?? null,
+    last_name:           u.lastName ?? null,
+    avatar_url:          u.image ?? undefined,
+    platform_role:       (u.platformRole ?? 'user') as Profile['platform_role'],
+    is_active:           u.isActive ?? true,
+    is_profile_complete: u.isProfileComplete ?? false,
+    preferences:         typeof u.preferences === 'string'
+                           ? JSON.parse(u.preferences)
+                           : (u.preferences as Profile['preferences']),
+  };
+};

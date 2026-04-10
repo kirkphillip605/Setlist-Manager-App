@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { authClient } from '@/lib/authClient';
+import { twoFactor } from '@/lib/authClient';
+import { useAuth } from '@/context/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -17,6 +18,7 @@ type ChallengeMode = 'totp' | 'recovery';
 
 const TwoFactorChallenge = () => {
   const navigate = useNavigate();
+  const { checkSession } = useAuth();
   const [loading, setLoading] = useState(false);
   const [mode, setMode] = useState<ChallengeMode>('totp');
   const [totpCode, setTotpCode] = useState('');
@@ -30,7 +32,7 @@ const TwoFactorChallenge = () => {
     }
     setLoading(true);
     try {
-      const result = await (authClient as any).twoFactor.verifyTotp({
+      const result = await twoFactor.verifyTotp({
         code: totpCode,
       });
       if (result?.error) {
@@ -38,9 +40,10 @@ const TwoFactorChallenge = () => {
         setLoading(false);
         return;
       }
+      await checkSession();
       navigate('/');
-    } catch (err: any) {
-      toast.error(err?.message ?? 'Verification failed');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Verification failed');
     } finally {
       setLoading(false);
     }
@@ -54,7 +57,7 @@ const TwoFactorChallenge = () => {
     }
     setLoading(true);
     try {
-      const result = await (authClient as any).twoFactor.verifyBackupCode({
+      const result = await twoFactor.verifyBackupCode({
         code: recoveryCode.trim(),
       });
       if (result?.error) {
@@ -62,9 +65,10 @@ const TwoFactorChallenge = () => {
         setLoading(false);
         return;
       }
+      await checkSession();
       navigate('/');
-    } catch (err: any) {
-      toast.error(err?.message ?? 'Verification failed');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Verification failed');
     } finally {
       setLoading(false);
     }

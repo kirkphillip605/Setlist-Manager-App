@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
-import { authClient } from '@/lib/authClient';
+import { updateUserProfile } from '@/lib/authClient';
 import { apiPatch } from '@/lib/apiFetch';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -29,18 +29,6 @@ const OnboardingWizard = () => {
     if (profile?.last_name)  setLastName(profile.last_name);
     if (profile?.first_name || profile?.last_name) { initializedRef.current = true; return; }
 
-    const meta = (user as any)?.user_metadata ?? {};
-    if (meta.full_name) {
-      const parts = meta.full_name.split(' ');
-      setFirstName(parts[0] ?? '');
-      setLastName(parts.slice(1).join(' ') ?? '');
-      initializedRef.current = true;
-    } else if (meta.given_name) {
-      setFirstName(meta.given_name  ?? '');
-      setLastName(meta.family_name  ?? '');
-      initializedRef.current = true;
-    }
-
     if (user?.name && !initializedRef.current) {
       const parts = user.name.split(' ');
       if (parts.length >= 2) {
@@ -59,11 +47,11 @@ const OnboardingWizard = () => {
     }
     setLoading(true);
     try {
-      await authClient.updateUser({
+      await updateUserProfile({
         name: `${firstName.trim()} ${lastName.trim()}`,
         firstName: firstName.trim(),
         lastName: lastName.trim(),
-      } as any);
+      });
 
       await apiPatch('/api/users/me', {
         first_name: firstName.trim(),
@@ -72,8 +60,8 @@ const OnboardingWizard = () => {
 
       await refreshProfile();
       setStep('2fa-prompt');
-    } catch (err: any) {
-      toast.error(err?.message ?? 'Failed to save profile');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to save profile');
     } finally {
       setLoading(false);
     }

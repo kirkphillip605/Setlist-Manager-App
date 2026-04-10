@@ -28,11 +28,13 @@ import { storageAdapter } from '@/lib/storageAdapter';
 import { useTheme } from '@/components/theme-provider';
 import { LoadingDialog } from '@/components/LoadingDialog';
 import { CachedImage } from '@/components/CachedImage';
+import { useAuth } from '@/context/AuthContext';
 
 type SignInMethod = 'password' | 'magic-link' | 'email-otp';
 
 const Login = () => {
   const navigate      = useNavigate();
+  const { checkSession } = useAuth();
   const { theme }     = useTheme();
   const [loading, setLoading]         = useState(false);
   const [email, setEmail]             = useState('');
@@ -97,15 +99,19 @@ const Login = () => {
     const result = await authClient.signIn.email({ email: email.trim(), password });
     if (result.error) {
       const msg = result.error.message ?? '';
-      if (msg.toLowerCase().includes('two factor') || msg.toLowerCase().includes('2fa') || (result.error as any).code === 'TWO_FACTOR_REQUIRED') {
+      const code = (result.error as { code?: string }).code ?? '';
+      const msgLower = msg.toLowerCase();
+      if (code === 'TWO_FACTOR_REQUIRED' || msgLower.includes('two factor') || msgLower.includes('2fa') || msgLower.includes('otp')) {
         navigate('/2fa-challenge');
       } else {
         toast.error(msg || 'Sign in failed');
       }
     } else {
-      if ((result.data as any)?.twoFactorRedirect) {
+      const data = result.data as Record<string, unknown> | null;
+      if (data?.twoFactorRedirect) {
         navigate('/2fa-challenge');
       } else {
+        await checkSession();
         navigate('/');
       }
     }
@@ -163,9 +169,11 @@ const Login = () => {
         otp: otpValue,
       });
       if (result.error) throw new Error(result.error.message ?? 'Invalid code');
-      if ((result.data as any)?.twoFactorRedirect) {
+      const data = result.data as Record<string, unknown> | null;
+      if (data?.twoFactorRedirect) {
         navigate('/2fa-challenge');
       } else {
+        await checkSession();
         navigate('/');
       }
     } catch (err) {
@@ -185,16 +193,12 @@ const Login = () => {
       email:     email.trim(),
       password,
       name:      email.trim(),
-      callbackURL: getCallbackUrl(),
-      fetchOptions: {
-        onSuccess: () => {
-          toast.success('Check your email to confirm your account!');
-          navigate('/verify-email');
-        },
-      },
-    } as any);
+    });
 
-    if (error) {
+    if (!error) {
+      toast.success('Check your email to confirm your account!');
+      navigate('/verify-email');
+    } else {
       const msg = error.message ?? '';
       if (msg.toLowerCase().includes('already') || msg.toLowerCase().includes('exists') || error.status === 409) {
         setConvergenceEmail(email.trim());

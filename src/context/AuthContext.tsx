@@ -1,5 +1,6 @@
-import React, { createContext, useContext, useCallback } from 'react';
+import React, { createContext, useContext, useCallback, useEffect, useState } from 'react';
 import { authClient, mapAuthUserToProfile } from '@/lib/authClient';
+import type { AuthUser } from '@/lib/authClient';
 import { useQueryClient } from '@tanstack/react-query';
 import { clear as clearIdb } from 'idb-keyval';
 import { Capacitor } from '@capacitor/core';
@@ -9,7 +10,7 @@ import { useStore } from '@/lib/store';
 import type { Profile, Setlist } from '@/types';
 
 interface AuthContextType {
-  user:           ReturnType<typeof authClient.useSession>['data']['user'] | null;
+  user:           AuthUser | null;
   profile:        Profile | null;
   loading:        boolean;
   isAdmin:        boolean;
@@ -17,7 +18,7 @@ interface AuthContextType {
   canManageGigs:  boolean;
   canEditSetlist: (setlist: Setlist, bandRole?: string) => boolean;
   signOut:        () => Promise<void>;
-  refreshProfile: () => void;
+  refreshProfile: () => Promise<void>;
   checkSession:   () => Promise<void>;
 }
 
@@ -30,17 +31,35 @@ const AuthContext = createContext<AuthContextType>({
   canManageGigs:  false,
   canEditSetlist: () => false,
   signOut:        async () => {},
-  refreshProfile: () => {},
+  refreshProfile: async () => {},
   checkSession:   async () => {},
 });
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
-  const { data: sessionData, isPending } = authClient.useSession();
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [isPending, setIsPending] = useState(true);
   const queryClient  = useQueryClient();
   const resetStore   = useStore(state => state.reset);
 
-  const user    = sessionData?.user ?? null;
+  useEffect(() => {
+    let mounted = true;
+    authClient.getSession().then(({ data }) => {
+      if (mounted) {
+        setUser(data?.user ?? null);
+        setIsPending(false);
+      }
+    }).catch(() => {
+      if (mounted) setIsPending(false);
+    });
+    return () => { mounted = false; };
+  }, []);
+
   const profile = user ? mapAuthUserToProfile(user) : null;
+
+  const refreshProfile = useCallback(async () => {
+    const { data } = await authClient.getSession();
+    setUser(data?.user ?? null);
+  }, []);
 
   const handleSignOut = useCallback(async () => {
     try {
@@ -48,6 +67,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     } catch (e) {
       console.error('[Auth] signOut failed:', e);
     }
+
+    setUser(null);
 
     try {
       queryClient.removeQueries();
@@ -66,11 +87,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   }, [queryClient, resetStore]);
 
   const checkSession = useCallback(async () => {
-    await authClient.getSession();
+    const { data } = await authClient.getSession();
+    setUser(data?.user ?? null);
   }, []);
 
   const isAdmin      = profile?.platform_role === 'platform_admin';
-  const isManager    = isAdmin; // Band-level manager comes from BandContext
+  const isManager    = isAdmin;
 
   const canManageGigs = isAdmin;
 
@@ -90,7 +112,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     canManageGigs,
     canEditSetlist,
     signOut:        handleSignOut,
-    refreshProfile: () => authClient.getSession({ fetchOptions: { headers: { 'cache-control': 'no-cache' } } } as any),
+    refreshProfile,
     checkSession,
   };
 

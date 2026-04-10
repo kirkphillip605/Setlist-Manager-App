@@ -99,7 +99,7 @@ const PublicOnlyRoute = ({ children }: { children: JSX.Element }) => {
 
   if (loading) return null;
   if (user) {
-    const from = (location.state as any)?.from?.pathname || '/';
+    const from = (location.state as { from?: { pathname?: string } } | null)?.from?.pathname || '/';
     return <Navigate to={from} replace />;
   }
   return children;
