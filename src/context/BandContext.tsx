@@ -6,12 +6,10 @@ import React, {
   useCallback,
   useMemo,
 } from 'react';
-import { authClient } from '@/lib/authClient';
+import { useAuth } from './AuthContext';
 import { apiGet } from '@/lib/apiFetch';
 import { storageAdapter } from '@/lib/storageAdapter';
 import type { Band, BandMembership, BandRole } from '@/types';
-
-// ── Types ─────────────────────────────────────────────────────────
 
 export interface BandWithMembership extends Band {
   membership: BandMembership;
@@ -47,17 +45,14 @@ const BandContext = createContext<BandContextType>({
   refreshBands:   async () => {},
 });
 
-// ── Provider ──────────────────────────────────────────────────────
-
 export const BandProvider = ({ children }: { children: React.ReactNode }) => {
-  const { data: sessionData, isPending } = authClient.useSession();
+  const { user, loading: authLoading } = useAuth();
   const [bands, setBands]               = useState<BandWithMembership[]>([]);
   const [activeBandId, setActiveBandId] = useState<string | null>(null);
   const [bandsLoading, setBandsLoading] = useState(true);
 
-  const userId = sessionData?.user?.id ?? null;
+  const userId = user?.id ?? null;
 
-  // ── Fetch user's bands ──────────────────────────────────────────
   const refreshBands = useCallback(async () => {
     if (!userId) {
       setBands([]);
@@ -69,7 +64,6 @@ export const BandProvider = ({ children }: { children: React.ReactNode }) => {
       const data = await apiGet<BandWithMembership[]>('/api/bands');
       setBands(data ?? []);
 
-      // Restore persisted active band or default to first
       const savedId = await storageAdapter.getItem(ACTIVE_BAND_KEY);
       const validId = data?.find(b => b.id === savedId)?.id ?? data?.[0]?.id ?? null;
       setActiveBandId(validId);
@@ -81,18 +75,16 @@ export const BandProvider = ({ children }: { children: React.ReactNode }) => {
   }, [userId]);
 
   useEffect(() => {
-    if (!isPending) {
+    if (!authLoading) {
       void refreshBands();
     }
-  }, [isPending, refreshBands]);
+  }, [authLoading, refreshBands]);
 
-  // ── Persist active band choice ──────────────────────────────────
   const setActiveBand = useCallback((bandId: string) => {
     setActiveBandId(bandId);
     void storageAdapter.setItem(ACTIVE_BAND_KEY, bandId);
   }, []);
 
-  // ── Derived values ──────────────────────────────────────────────
   const activeBand = useMemo(
     () => bands.find(b => b.id === activeBandId) ?? null,
     [bands, activeBandId]
@@ -102,7 +94,7 @@ export const BandProvider = ({ children }: { children: React.ReactNode }) => {
   const isOwner   = activeBandRole === 'owner';
   const isManager = activeBandRole === 'owner' || activeBandRole === 'manager';
   const isMember  = !!activeBandRole;
-  const noBands   = !bandsLoading && !isPending && !!userId && bands.length === 0;
+  const noBands   = !bandsLoading && !authLoading && !!userId && bands.length === 0;
 
   const value: BandContextType = {
     bands,
@@ -121,7 +113,6 @@ export const BandProvider = ({ children }: { children: React.ReactNode }) => {
   return <BandContext.Provider value={value}>{children}</BandContext.Provider>;
 };
 
-// ── Hook ──────────────────────────────────────────────────────────
 export const useBand = () => {
   const ctx = useContext(BandContext);
   if (ctx === undefined) throw new Error('useBand must be used within a BandProvider');

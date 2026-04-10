@@ -1,17 +1,23 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
-import { updateUserProfile } from '@/lib/authClient';
-import { apiPatch } from '@/lib/apiFetch';
+import { authClient, updateUserProfile } from '@/lib/authClient';
+import { apiGet, apiPatch } from '@/lib/apiFetch';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
-import { Loader2, User, CheckCircle2, Shield, ArrowRight } from 'lucide-react';
+import { Loader2, User, CheckCircle2, Shield, ArrowRight, Lock } from 'lucide-react';
 import { toast } from 'sonner';
 import { LoadingDialog } from '@/components/LoadingDialog';
 
-type OnboardingStep = 'name' | '2fa-prompt';
+type OnboardingStep = 'name' | 'password' | '2fa-prompt';
+
+interface AuthProviderInfo {
+  providers: string[];
+  hasPassword: boolean;
+  hasOAuth: boolean;
+}
 
 const OnboardingWizard = () => {
   const { user, profile, refreshProfile, signOut } = useAuth();
@@ -21,7 +27,14 @@ const OnboardingWizard = () => {
 
   const [firstName, setFirstName]  = useState('');
   const [lastName,  setLastName]   = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [providerInfo, setProviderInfo] = useState<AuthProviderInfo | null>(null);
   const initializedRef = useRef(false);
+
+  useEffect(() => {
+    apiGet<AuthProviderInfo>('/api/users/me/auth-providers').then(setProviderInfo).catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (initializedRef.current) return;
@@ -38,6 +51,14 @@ const OnboardingWizard = () => {
       }
     }
   }, [profile, user]);
+
+  const advanceAfterName = () => {
+    if (providerInfo && !providerInfo.hasPassword && providerInfo.hasOAuth) {
+      setStep('password');
+    } else {
+      setStep('2fa-prompt');
+    }
+  };
 
   const handleNameSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -59,9 +80,43 @@ const OnboardingWizard = () => {
       });
 
       await refreshProfile();
-      setStep('2fa-prompt');
+      advanceAfterName();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to save profile');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newPassword.length < 8) {
+      toast.error('Password must be at least 8 characters');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      toast.error('Passwords do not match');
+      return;
+    }
+    setLoading(true);
+    try {
+      const result = await authClient.signUp.email({
+        email: user?.email ?? '',
+        password: newPassword,
+        name: `${firstName.trim()} ${lastName.trim()}`,
+      });
+      if (result.error) {
+        const msg = result.error.message ?? '';
+        if (!msg.toLowerCase().includes('already')) {
+          toast.error(msg || 'Failed to set password');
+          setLoading(false);
+          return;
+        }
+      }
+      toast.success('Password set successfully');
+      setStep('2fa-prompt');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to set password');
     } finally {
       setLoading(false);
     }
@@ -74,6 +129,67 @@ const OnboardingWizard = () => {
   const handleSetup2FA = () => {
     navigate('/2fa-setup');
   };
+
+  if (step === 'password') {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background p-4 overflow-y-auto">
+        <LoadingDialog open={loading} message="Setting password..." />
+        <Card className="w-full max-w-md border-border shadow-lg my-auto">
+          <CardHeader className="text-center">
+            <div className="mx-auto bg-primary/10 p-4 rounded-full mb-3">
+              <Lock className="h-8 w-8 text-primary" />
+            </div>
+            <CardTitle className="text-2xl">Set a Password</CardTitle>
+            <CardDescription>
+              You signed in with Google. Set a password so you can also sign in with your email.
+            </CardDescription>
+          </CardHeader>
+
+          <form onSubmit={handlePasswordSubmit}>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="new-password">Password</Label>
+                <Input
+                  id="new-password"
+                  type="password"
+                  placeholder="At least 8 characters"
+                  value={newPassword}
+                  onChange={e => setNewPassword(e.target.value)}
+                  autoFocus
+                  required
+                  minLength={8}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="confirm-password">Confirm Password</Label>
+                <Input
+                  id="confirm-password"
+                  type="password"
+                  placeholder="Re-enter password"
+                  value={confirmPassword}
+                  onChange={e => setConfirmPassword(e.target.value)}
+                  required
+                />
+              </div>
+            </CardContent>
+
+            <CardFooter className="flex flex-col gap-2 pt-2">
+              <Button type="submit" className="w-full" disabled={loading}>
+                {loading
+                  ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  : <Lock className="mr-2 h-4 w-4" />}
+                Set Password
+              </Button>
+              <Button type="button" variant="ghost" size="sm" className="w-full" onClick={() => setStep('2fa-prompt')}>
+                Skip for now
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+            </CardFooter>
+          </form>
+        </Card>
+      </div>
+    );
+  }
 
   if (step === '2fa-prompt') {
     return (

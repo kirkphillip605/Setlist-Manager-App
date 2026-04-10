@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
 import { db } from '../db/index.js';
-import { users, bandMemberships, bands } from '../db/schema.js';
+import { users, accounts, bandMemberships, bands } from '../db/schema.js';
 import { and, eq, isNull, ne } from 'drizzle-orm';
 import { requireAuth, requirePlatformAdmin, type AuthVariables } from '../middleware/auth.js';
 import { sendPhoneReassignmentEmail } from '../lib/email.js';
@@ -36,6 +36,19 @@ app.get('/me', requireAuth, async (c) => {
     preferences:         user.preferences,
     bands: memberships.map(r => ({ ...r.band, membership: r.membership })),
   });
+});
+
+app.get('/me/auth-providers', requireAuth, async (c) => {
+  const userId = c.get('userId');
+  const userAccounts = await db.select({
+    providerId: accounts.providerId,
+  }).from(accounts).where(eq(accounts.userId, userId));
+
+  const providers = userAccounts.map(a => a.providerId);
+  const hasPassword = providers.includes('credential');
+  const hasOAuth = providers.some(p => p !== 'credential' && p !== 'email-otp');
+
+  return c.json({ providers, hasPassword, hasOAuth });
 });
 
 // PATCH /api/users/me — update own profile
