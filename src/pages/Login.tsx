@@ -51,12 +51,6 @@ const Login = () => {
   const [magicLinkSent, setMagicLinkSent] = useState(false);
 
   useEffect(() => {
-    authClient.getSession().then(({ data }) => {
-      if (data?.user) navigate('/');
-    });
-  }, [navigate]);
-
-  useEffect(() => {
     if (theme === 'system') {
       const mq = window.matchMedia('(prefers-color-scheme: dark)');
       setIsDarkMode(mq.matches);

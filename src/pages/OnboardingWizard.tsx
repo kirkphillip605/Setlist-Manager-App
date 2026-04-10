@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
-import { authClient, updateUserProfile } from '@/lib/authClient';
+import { updateUserProfile, setInitialPassword } from '@/lib/authClient';
 import { apiGet, apiPatch } from '@/lib/apiFetch';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -100,18 +100,11 @@ const OnboardingWizard = () => {
     }
     setLoading(true);
     try {
-      const result = await authClient.signUp.email({
-        email: user?.email ?? '',
-        password: newPassword,
-        name: `${firstName.trim()} ${lastName.trim()}`,
-      });
-      if (result.error) {
-        const msg = result.error.message ?? '';
-        if (!msg.toLowerCase().includes('already')) {
-          toast.error(msg || 'Failed to set password');
-          setLoading(false);
-          return;
-        }
+      const result = await setInitialPassword({ newPassword });
+      if (result?.error) {
+        toast.error(result.error.message || 'Failed to set password');
+        setLoading(false);
+        return;
       }
       toast.success('Password set successfully');
       setStep('2fa-prompt');

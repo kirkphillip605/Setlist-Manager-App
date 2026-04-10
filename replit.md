@@ -70,25 +70,30 @@ A React + Vite PWA / Capacitor app for band setlist and gig management with full
 
 1. Sign in via email/password, Google OAuth, magic link, or email OTP
 2. BetterAuth sets an httpOnly session cookie (365-day expiry by default)
-3. `AuthContext` uses `authClient.useSession()` for reactive session state
+3. `AuthContext` uses one-shot `authClient.getSession()` with cookie-presence check (no polling); all consumers (BandContext, useSyncedData) derive auth state from AuthContext
 4. `ProtectedRoute` checks: logged in → account active → profile complete (`isProfileComplete`) → has ≥1 band
 5. If profile incomplete → `/onboarding` (name entry, then optional 2FA prompt)
 6. If no bands → `/bands/setup` (create or join)
 7. Bearer token plugin enables API auth for mobile apps without cookies
-8. 2FA (TOTP) intercepts login when enabled — challenge screen at `/2fa-challenge`
+8. 2FA intercepts login when enabled — challenge screen at `/2fa-challenge` (TOTP, email OTP, recovery codes)
 9. Rate limiting enforced server-side (30 req/60s window)
 
 ### Auth Bug Fixes Applied
 - **Onboarding loop fixed**: `authClient.updateUser()` updates BetterAuth session cache atomically alongside `apiPatch` to `/api/users/me`
-- **No excessive polling**: Login page uses one-shot `authClient.getSession()` instead of `useSession()` polling hook; WS client guards against no-session connections
+- **No session polling**: All `authClient.useSession()` calls replaced with state-based auth (AuthProvider one-shot getSession with cookie-presence check, BandContext/useSyncedData derive from AuthContext); WS client guards against no-session connections; Login.tsx does zero getSession calls
 - **Sign-up convergence**: Attempting to sign up with an existing email transitions to Sign In tab with email pre-filled
 - **Name fields removed from sign-up**: Registration only collects email + password; name is collected during onboarding
 
 ### 2FA Support
-- TOTP-based two-factor auth via BetterAuth's `twoFactor` plugin
+- Two-factor auth via BetterAuth's `twoFactor` plugin (TOTP + email OTP)
 - Setup wizard at `/2fa-setup` with QR code, verify, and recovery code confirmation
-- Challenge screen at `/2fa-challenge` with TOTP or recovery code options
+- Challenge screen at `/2fa-challenge` with TOTP, email OTP, or recovery code options
 - Prompted (but skippable) after onboarding completion
+- OAuth users prompted to set password during onboarding (progressive completion wall)
+
+### Type Safety
+- All auth-related `as any` casts replaced with typed helpers in `src/lib/authClient.ts`: `twoFactor` namespace, `updateUserProfile()`, `changeUserPassword()`, `resetUserPassword()`, `setInitialPassword()`
+- `GET /api/users/me/auth-providers` — returns provider info for progressive onboarding
 
 ### Phone Number Reassignment
 - `POST /api/users/me/reassign-phone` transfers verified numbers between users

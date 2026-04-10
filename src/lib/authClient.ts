@@ -61,6 +61,8 @@ interface TwoFactorNamespace {
   enable: (opts: { password?: string }) => Promise<TwoFactorResult<TwoFactorEnableData>>;
   verifyTotp: (opts: { code: string }) => Promise<TwoFactorResult>;
   verifyBackupCode: (opts: { code: string }) => Promise<TwoFactorResult>;
+  sendOtp: () => Promise<TwoFactorResult>;
+  verifyOtp: (opts: { code: string }) => Promise<TwoFactorResult>;
 }
 
 export const twoFactor: TwoFactorNamespace =
@@ -86,6 +88,12 @@ export const resetUserPassword = (opts: {
 }) => (authClient as unknown as {
   updatePassword: (o: typeof opts) => Promise<TwoFactorResult>;
 }).updatePassword(opts);
+
+export const setInitialPassword = (opts: {
+  newPassword: string;
+}) => (authClient as unknown as {
+  setPassword: (o: typeof opts) => Promise<TwoFactorResult>;
+}).setPassword(opts);
 
 export const mapAuthUserToProfile = (user: AuthUser): Profile => {
   const u = user as UserWithFields;

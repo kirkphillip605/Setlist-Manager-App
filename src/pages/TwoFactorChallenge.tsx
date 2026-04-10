@@ -11,10 +11,10 @@ import {
   InputOTPGroup,
   InputOTPSlot,
 } from '@/components/ui/input-otp';
-import { Loader2, Shield, KeyRound } from 'lucide-react';
+import { Loader2, Shield, KeyRound, Mail } from 'lucide-react';
 import { toast } from 'sonner';
 
-type ChallengeMode = 'totp' | 'recovery';
+type ChallengeMode = 'totp' | 'email-otp' | 'recovery';
 
 const TwoFactorChallenge = () => {
   const navigate = useNavigate();
@@ -22,6 +22,8 @@ const TwoFactorChallenge = () => {
   const [loading, setLoading] = useState(false);
   const [mode, setMode] = useState<ChallengeMode>('totp');
   const [totpCode, setTotpCode] = useState('');
+  const [emailOtpCode, setEmailOtpCode] = useState('');
+  const [emailOtpSent, setEmailOtpSent] = useState(false);
   const [recoveryCode, setRecoveryCode] = useState('');
 
   const handleTOTPVerify = async (e: React.FormEvent) => {
@@ -34,6 +36,49 @@ const TwoFactorChallenge = () => {
     try {
       const result = await twoFactor.verifyTotp({
         code: totpCode,
+      });
+      if (result?.error) {
+        toast.error(result.error.message ?? 'Invalid code');
+        setLoading(false);
+        return;
+      }
+      await checkSession();
+      navigate('/');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Verification failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSendEmailOtp = async () => {
+    setLoading(true);
+    try {
+      const result = await twoFactor.sendOtp();
+      if (result?.error) {
+        toast.error(result.error.message ?? 'Failed to send code');
+        setLoading(false);
+        return;
+      }
+      setEmailOtpSent(true);
+      toast.success('Verification code sent to your email');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to send code');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleEmailOtpVerify = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (emailOtpCode.length < 6) {
+      toast.error('Please enter the full code');
+      return;
+    }
+    setLoading(true);
+    try {
+      const result = await twoFactor.verifyOtp({
+        code: emailOtpCode,
       });
       if (result?.error) {
         toast.error(result.error.message ?? 'Invalid code');
@@ -73,6 +118,89 @@ const TwoFactorChallenge = () => {
       setLoading(false);
     }
   };
+
+  if (mode === 'email-otp') {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background p-4 overflow-y-auto">
+        <Card className="w-full max-w-md border-border shadow-lg my-auto">
+          <CardHeader className="text-center">
+            <div className="mx-auto bg-primary/10 p-4 rounded-full mb-3">
+              <Mail className="h-8 w-8 text-primary" />
+            </div>
+            <CardTitle className="text-xl">Email Verification</CardTitle>
+            <CardDescription>
+              {emailOtpSent
+                ? 'Enter the verification code sent to your email.'
+                : 'We\'ll send a verification code to your email address.'}
+            </CardDescription>
+          </CardHeader>
+          {!emailOtpSent ? (
+            <CardFooter className="flex flex-col gap-2">
+              <Button className="w-full" onClick={handleSendEmailOtp} disabled={loading}>
+                {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                <Mail className="mr-2 h-4 w-4" />
+                Send Verification Code
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="w-full"
+                onClick={() => setMode('totp')}
+              >
+                Use authenticator app instead
+              </Button>
+            </CardFooter>
+          ) : (
+            <form onSubmit={handleEmailOtpVerify}>
+              <CardContent className="space-y-4">
+                <div className="flex justify-center">
+                  <InputOTP
+                    maxLength={6}
+                    value={emailOtpCode}
+                    onChange={setEmailOtpCode}
+                  >
+                    <InputOTPGroup>
+                      <InputOTPSlot index={0} />
+                      <InputOTPSlot index={1} />
+                      <InputOTPSlot index={2} />
+                      <InputOTPSlot index={3} />
+                      <InputOTPSlot index={4} />
+                      <InputOTPSlot index={5} />
+                    </InputOTPGroup>
+                  </InputOTP>
+                </div>
+              </CardContent>
+              <CardFooter className="flex flex-col gap-2">
+                <Button type="submit" className="w-full" disabled={loading || emailOtpCode.length < 6}>
+                  {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Verify
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="w-full"
+                  onClick={() => { setEmailOtpSent(false); setEmailOtpCode(''); }}
+                >
+                  Resend code
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="w-full"
+                  onClick={() => setMode('totp')}
+                >
+                  Use authenticator app instead
+                </Button>
+              </CardFooter>
+            </form>
+          )}
+        </Card>
+      </div>
+    );
+  }
 
   if (mode === 'recovery') {
     return (
@@ -157,6 +285,15 @@ const TwoFactorChallenge = () => {
             <Button type="submit" className="w-full" disabled={loading || totpCode.length < 6}>
               {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Verify
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="w-full"
+              onClick={() => setMode('email-otp')}
+            >
+              Get a code via email instead
             </Button>
             <Button
               type="button"
