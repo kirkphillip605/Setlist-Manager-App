@@ -46,7 +46,7 @@ app.use('*', cors({
 }));
 
 // ── BetterAuth ────────────────────────────────────────────────────
-app.on(['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'], '/api/auth/**', (c) =>
+app.on(['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'], '/api/auth/*', (c) =>
   auth.handler(c.req.raw),
 );
 
