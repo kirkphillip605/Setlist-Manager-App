@@ -67,7 +67,7 @@ const SongDetail = () => {
 
   // Safe Delete State
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  const [usageData, setUsageData] = useState<{setlistName: string, date?: string}[]>([]);
+  const [usageData, setUsageData] = useState<{setlist_name: string, date?: string}[]>([]);
   const [isCheckingUsage, setIsCheckingUsage] = useState(false);
 
   // BPM Monitoring State
@@ -474,7 +474,7 @@ const SongDetail = () => {
                                     <ul className="list-disc list-inside space-y-1">
                                         {usageData.map((usage, idx) => (
                                             <li key={idx}>
-                                                <span className="font-medium">{usage.setlistName}</span> 
+                                                <span className="font-medium">{usage.setlist_name}</span> 
                                                 <span className="text-xs text-muted-foreground ml-2">({usage.date})</span>
                                             </li>
                                         ))}

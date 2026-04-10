@@ -1,4 +1,4 @@
-import { apiGet, apiPost, apiPut, apiPatch, apiDel, apiFetch } from '@/lib/apiFetch';
+import { apiGet, apiPost, apiPatch, apiDel, apiFetch } from '@/lib/apiFetch';
 import type { Song, Setlist, Gig, GigSession, Set as SetType, SetSong } from '@/types';
 
 // ── Version helper ────────────────────────────────────────────────
@@ -22,7 +22,7 @@ export const getSong = (bandId: string, id: string) =>
 
 export const saveSong = async (bandId: string, song: Partial<Song>): Promise<Song> => {
   if (song.id) {
-    return apiPut<Song>(`/api/bands/${bandId}/songs/${song.id}`, song);
+    return apiPatch<Song>(`/api/bands/${bandId}/songs/${song.id}`, song);
   }
   return apiPost<Song>(`/api/bands/${bandId}/songs`, song);
 };
@@ -31,7 +31,7 @@ export const deleteSong = (bandId: string, id: string) =>
   apiDel(`/api/bands/${bandId}/songs/${id}`);
 
 export const getSongUsage = (bandId: string, songId: string) =>
-  apiGet<{ setlistName: string }[]>(`/api/bands/${bandId}/songs/${songId}/usage`);
+  apiGet<{ setlist_name: string }[]>(`/api/bands/${bandId}/songs/${songId}/usage`);
 
 // ── Gigs ──────────────────────────────────────────────────────────
 
@@ -43,7 +43,7 @@ export const getGig = (bandId: string, id: string) =>
 
 export const saveGig = async (bandId: string, gig: Partial<Gig>): Promise<Gig> => {
   if (gig.id) {
-    return apiPut<Gig>(`/api/bands/${bandId}/gigs/${gig.id}`, gig);
+    return apiPatch<Gig>(`/api/bands/${bandId}/gigs/${gig.id}`, gig);
   }
   return apiPost<Gig>(`/api/bands/${bandId}/gigs`, gig);
 };
@@ -86,7 +86,7 @@ export const createSetlist = (bandId: string, name: string, isPersonal = false, 
   apiPost<Setlist>(`/api/bands/${bandId}/setlists`, { name, is_personal: isPersonal, is_default: isDefault });
 
 export const updateSetlist = (bandId: string, id: string, updates: Partial<Setlist>) =>
-  apiPut<Setlist>(`/api/bands/${bandId}/setlists/${id}`, updates);
+  apiPatch<Setlist>(`/api/bands/${bandId}/setlists/${id}`, updates);
 
 export const deleteSetlist = (bandId: string, id: string) =>
   apiDel(`/api/bands/${bandId}/setlists/${id}`);

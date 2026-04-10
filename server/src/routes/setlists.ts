@@ -6,6 +6,7 @@ import { setlists, sets, setSongs, songs, gigs, gigSessions } from '../db/schema
 import { and, eq, isNull, inArray } from 'drizzle-orm';
 import { requireAuth } from '../middleware/auth.js';
 import { requireBandMember, requireBandManager, type BandVariables } from '../middleware/band.js';
+import { toSnakeCase, toSnakeCaseArray } from '../utils/caseTransform.js';
 
 const app = new Hono<{ Variables: BandVariables }>();
 
@@ -47,7 +48,7 @@ app.get('/', requireAuth, requireBandMember, async (c) => {
       .map(s => ({ ...setMap.get(s.id)! })),
   }));
 
-  return c.json(result);
+  return c.json(toSnakeCaseArray(result));
 });
 
 // GET /api/bands/:bandId/setlists/:id
@@ -80,7 +81,7 @@ app.get('/:id', requireAuth, requireBandMember, async (c) => {
     setMap.get(ss.setId)?.songs.push({ ...ss, song });
   }
 
-  return c.json({ ...sl, sets: allSets.map(s => setMap.get(s.id)!) });
+  return c.json(toSnakeCase({ ...sl, sets: allSets.map(s => setMap.get(s.id)!) }));
 });
 
 // POST /api/bands/:bandId/setlists
@@ -104,7 +105,7 @@ app.post('/', requireAuth, requireBandMember, requireBandManager,
       bandId, name, isPersonal: is_personal, isDefault: is_default, createdBy: userId,
     }).returning();
 
-    return c.json({ ...sl, sets: [] }, 201);
+    return c.json(toSnakeCase({ ...sl, sets: [] }), 201);
   }
 );
 
@@ -148,7 +149,7 @@ app.patch('/:id', requireAuth, requireBandMember, requireBandManager,
       .where(and(eq(setlists.id, id), eq(setlists.bandId, bandId)))
       .returning();
 
-    return c.json(sl);
+    return c.json(toSnakeCase(sl));
   }
 );
 
@@ -173,7 +174,7 @@ app.get('/:id/usage', requireAuth, requireBandMember, async (c) => {
   const rows = await db.select().from(gigs)
     .where(and(eq(gigs.setlistId, id), eq(gigs.bandId, bandId), isNull(gigs.deletedAt)));
 
-  return c.json(rows);
+  return c.json(toSnakeCaseArray(rows));
 });
 
 // POST /api/bands/:bandId/setlists/:id/sync — full setlist sync (editor save)

@@ -6,8 +6,14 @@ import { songs } from '../db/schema.js';
 import { and, eq, isNull, ilike, or } from 'drizzle-orm';
 import { requireAuth } from '../middleware/auth.js';
 import { requireBandMember, requireBandManager, type BandVariables } from '../middleware/band.js';
+import { toSnakeCase, toSnakeCaseArray } from '../utils/caseTransform.js';
 
 const app = new Hono<{ Variables: BandVariables }>();
+
+const emptyToNull = z.preprocess(
+  (val) => (typeof val === 'string' && val.trim() === '' ? null : val),
+  z.string().url().nullable().optional()
+);
 
 const songSchema = z.object({
   title:      z.string().min(1).max(200),
@@ -17,8 +23,8 @@ const songSchema = z.object({
   tempo:      z.string().max(50).default(''),
   duration:   z.string().max(20).default(''),
   note:       z.string().max(2000).default(''),
-  cover_url:  z.string().url().nullable().optional(),
-  spotify_url: z.string().url().nullable().optional(),
+  cover_url:  emptyToNull,
+  spotify_url: emptyToNull,
   is_retired: z.boolean().default(false),
 });
 
@@ -36,7 +42,7 @@ app.get('/', requireAuth, requireBandMember, async (c) => {
     .where(and(...conditions))
     .orderBy(songs.title);
 
-  return c.json(rows);
+  return c.json(toSnakeCaseArray(rows));
 });
 
 // GET /api/bands/:bandId/songs/:id
@@ -49,7 +55,7 @@ app.get('/:id', requireAuth, requireBandMember, async (c) => {
     .limit(1);
 
   if (!song) return c.json({ error: 'Song not found' }, 404);
-  return c.json(song);
+  return c.json(toSnakeCase(song));
 });
 
 // POST /api/bands/:bandId/songs
@@ -63,12 +69,19 @@ app.post('/', requireAuth, requireBandMember, requireBandManager,
     const [song] = await db.insert(songs).values({
       bandId,
       createdBy: userId,
-      ...body,
+      title: body.title,
+      artist: body.artist,
+      lyrics: body.lyrics,
+      key: body.key,
+      tempo: body.tempo,
+      duration: body.duration,
+      note: body.note,
       coverUrl: body.cover_url ?? null,
       spotifyUrl: body.spotify_url ?? null,
+      isRetired: body.is_retired ?? false,
     }).returning();
 
-    return c.json(song, 201);
+    return c.json(toSnakeCase(song), 201);
   }
 );
 
@@ -81,12 +94,17 @@ app.patch('/:id', requireAuth, requireBandMember, requireBandManager,
     const id = c.req.param('id');
     const body = c.req.valid('json');
 
-    const updates: Record<string, unknown> = {
-      lastUpdatedBy: userId,
-      ...body,
-    };
-    if ('cover_url' in body) updates.coverUrl = body.cover_url;
-    if ('spotify_url' in body) updates.spotifyUrl = body.spotify_url;
+    const updates: Record<string, unknown> = { lastUpdatedBy: userId };
+    if (body.title !== undefined)       updates.title = body.title;
+    if (body.artist !== undefined)      updates.artist = body.artist;
+    if (body.lyrics !== undefined)      updates.lyrics = body.lyrics;
+    if (body.key !== undefined)         updates.key = body.key;
+    if (body.tempo !== undefined)       updates.tempo = body.tempo;
+    if (body.duration !== undefined)    updates.duration = body.duration;
+    if (body.note !== undefined)        updates.note = body.note;
+    if ('cover_url' in body)            updates.coverUrl = body.cover_url;
+    if ('spotify_url' in body)          updates.spotifyUrl = body.spotify_url;
+    if (body.is_retired !== undefined)  updates.isRetired = body.is_retired;
 
     const [song] = await db.update(songs)
       .set(updates)
@@ -94,7 +112,7 @@ app.patch('/:id', requireAuth, requireBandMember, requireBandManager,
       .returning();
 
     if (!song) return c.json({ error: 'Song not found' }, 404);
-    return c.json(song);
+    return c.json(toSnakeCase(song));
   }
 );
 
@@ -132,7 +150,7 @@ app.get('/:id/usage', requireAuth, requireBandMember, async (c) => {
     );
 
   const unique = [...new Map(usage.map(u => [u.setlistName, u])).values()];
-  return c.json(unique);
+  return c.json(toSnakeCaseArray(unique));
 });
 
 export default app;

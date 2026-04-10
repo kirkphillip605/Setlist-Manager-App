@@ -6,6 +6,7 @@ import { gigs, gigSessions, setlists } from '../db/schema.js';
 import { and, eq, isNull, asc } from 'drizzle-orm';
 import { requireAuth } from '../middleware/auth.js';
 import { requireBandMember, requireBandManager, type BandVariables } from '../middleware/band.js';
+import { toSnakeCase, toSnakeCaseArray } from '../utils/caseTransform.js';
 
 const app = new Hono<{ Variables: BandVariables }>();
 
@@ -33,7 +34,7 @@ app.get('/', requireAuth, requireBandMember, async (c) => {
     .where(and(eq(gigs.bandId, bandId), isNull(gigs.deletedAt)))
     .orderBy(asc(gigs.startTime));
 
-  return c.json(rows.map(r => ({ ...r.gig, setlist: r.setlist?.id ? r.setlist : null })));
+  return c.json(rows.map(r => toSnakeCase({ ...r.gig, setlist: r.setlist?.id ? r.setlist : null })));
 });
 
 // GET /api/bands/:bandId/gigs/:id
@@ -49,7 +50,7 @@ app.get('/:id', requireAuth, requireBandMember, async (c) => {
     .limit(1);
 
   if (!row) return c.json({ error: 'Gig not found' }, 404);
-  return c.json({ ...row.gig, setlist: row.setlist?.id ? row.setlist : null });
+  return c.json(toSnakeCase({ ...row.gig, setlist: row.setlist?.id ? row.setlist : null }));
 });
 
 // POST /api/bands/:bandId/gigs
@@ -75,7 +76,7 @@ app.post('/', requireAuth, requireBandMember, requireBandManager,
       zip:       body.zip ?? null,
     }).returning();
 
-    return c.json(gig, 201);
+    return c.json(toSnakeCase(gig), 201);
   }
 );
 
@@ -112,7 +113,7 @@ app.patch('/:id', requireAuth, requireBandMember, requireBandManager,
       .returning();
 
     if (!gig) return c.json({ error: 'Gig not found' }, 404);
-    return c.json(gig);
+    return c.json(toSnakeCase(gig));
   }
 );
 
@@ -136,7 +137,7 @@ app.post('/:id/cancel', requireAuth, requireBandMember, requireBandManager,
       .where(and(eq(gigs.id, id), eq(gigs.bandId, bandId)))
       .returning();
 
-    return c.json(gig);
+    return c.json(toSnakeCase(gig));
   }
 );
 

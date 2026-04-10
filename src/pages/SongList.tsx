@@ -124,7 +124,7 @@ const SongList = () => {
   
   // Safe Delete States
   const [songToDelete, setSongToDelete] = useState<Song | null>(null);
-  const [usageData, setUsageData] = useState<{setlistName: string, date?: string}[]>([]);
+  const [usageData, setUsageData] = useState<{setlist_name: string, date?: string}[]>([]);
   const [isCheckingUsage, setIsCheckingUsage] = useState(false);
 
   const queryClient = useQueryClient();
@@ -330,7 +330,7 @@ const SongList = () => {
                                     <ul className="list-disc list-inside space-y-1">
                                         {usageData.map((usage, idx) => (
                                             <li key={idx}>
-                                                <span className="font-medium">{usage.setlistName}</span> 
+                                                <span className="font-medium">{usage.setlist_name}</span> 
                                             </li>
                                         ))}
                                     </ul>
