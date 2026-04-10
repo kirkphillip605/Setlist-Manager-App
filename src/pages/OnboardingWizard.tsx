@@ -32,9 +32,15 @@ const OnboardingWizard = () => {
   const [providerInfo, setProviderInfo] = useState<AuthProviderInfo | null>(null);
   const initializedRef = useRef(false);
 
+  const profileCompleteOnMount = useRef(profile?.is_profile_complete ?? false);
+
   useEffect(() => {
+    if (profileCompleteOnMount.current) {
+      navigate('/', { replace: true });
+      return;
+    }
     apiGet<AuthProviderInfo>('/api/users/me/auth-providers').then(setProviderInfo).catch(() => {});
-  }, []);
+  }, [navigate]);
 
   useEffect(() => {
     if (initializedRef.current) return;
@@ -130,12 +136,7 @@ const OnboardingWizard = () => {
   };
 
   const handleSkip2FA = async () => {
-    try {
-      await apiPost('/api/users/me/complete-profile', {});
-      await refreshProfile();
-    } catch {
-      // Profile may already be complete
-    }
+    await refreshProfile();
     navigate('/');
   };
 

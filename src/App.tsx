@@ -84,7 +84,6 @@ const ProtectedRoute = ({ children, requireBand = true }: { children: JSX.Elemen
 
   // Redirect away from special pages once conditions are met
   if (location.pathname === '/reactivate' && profile?.is_active) return <Navigate to="/" replace />;
-  if (location.pathname === '/onboarding' && profile?.is_profile_complete) return <Navigate to="/" replace />;
   if (location.pathname === '/bands/setup' && !noBands)           return <Navigate to="/" replace />;
 
   return <DataHydration>{children}</DataHydration>;
