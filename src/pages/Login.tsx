@@ -29,6 +29,7 @@ import { useTheme } from '@/components/theme-provider';
 import { LoadingDialog } from '@/components/LoadingDialog';
 import { CachedImage } from '@/components/CachedImage';
 import { useAuth } from '@/context/AuthContext';
+import { apiPost } from '@/lib/apiFetch';
 
 type SignInMethod = 'password' | 'magic-link' | 'email-otp';
 
@@ -182,6 +183,21 @@ const Login = () => {
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+
+    try {
+      const checkResult = await apiPost<{ exists: boolean; code: string | null }>('/api/users/check-email', {
+        email: email.trim(),
+      });
+      if (checkResult?.exists) {
+        setConvergenceEmail(email.trim());
+        setActiveTab('login');
+        toast.info('An account with this email already exists. Please sign in instead.');
+        setLoading(false);
+        return;
+      }
+    } catch {
+      // Fall through to sign-up attempt if check fails
+    }
 
     const { error } = await authClient.signUp.email({
       email:     email.trim(),

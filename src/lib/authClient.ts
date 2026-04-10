@@ -7,6 +7,7 @@ import { twoFactorClient } from 'better-auth/client/plugins';
 import type { Profile } from '@/types';
 
 const API_URL = import.meta.env.VITE_API_URL as string;
+const AUTH_BASE = `${API_URL}/api/auth`;
 
 type ForgetPasswordData = { email: string; redirectTo?: string };
 type AuthFetchResult = Promise<{ data: unknown; error: { message: string; status: number } | null }>;
@@ -31,7 +32,7 @@ interface AdditionalUserFields {
 }
 
 export const authClient = createAuthClient({
-  baseURL: `${API_URL}/api/auth`,
+  baseURL: AUTH_BASE,
   plugins: [
     emailAndPasswordClient(),
     magicLinkClient(),
@@ -47,9 +48,26 @@ export type AuthUser    = typeof authClient.$Infer.Session.user;
 
 type UserWithFields = AuthUser & AdditionalUserFields;
 
-interface TwoFactorResult<T = Record<string, unknown>> {
+interface AuthApiResult<T = Record<string, unknown>> {
   data?: T | null;
   error?: { message: string; status?: number } | null;
+}
+
+async function authFetch<T = Record<string, unknown>>(
+  path: string,
+  body?: Record<string, unknown>
+): Promise<AuthApiResult<T>> {
+  const res = await fetch(`${AUTH_BASE}${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const json = await res.json();
+  if (!res.ok) {
+    return { error: { message: json?.message ?? json?.error ?? 'Request failed', status: res.status } };
+  }
+  return { data: json as T };
 }
 
 interface TwoFactorEnableData {
@@ -57,43 +75,39 @@ interface TwoFactorEnableData {
   backupCodes?: string[];
 }
 
-interface TwoFactorNamespace {
-  enable: (opts: { password?: string }) => Promise<TwoFactorResult<TwoFactorEnableData>>;
-  verifyTotp: (opts: { code: string }) => Promise<TwoFactorResult>;
-  verifyBackupCode: (opts: { code: string }) => Promise<TwoFactorResult>;
-  sendOtp: () => Promise<TwoFactorResult>;
-  verifyOtp: (opts: { code: string }) => Promise<TwoFactorResult>;
-}
-
-export const twoFactor: TwoFactorNamespace =
-  (authClient as unknown as { twoFactor: TwoFactorNamespace }).twoFactor;
+export const twoFactor = {
+  enable: (opts: { password?: string }) =>
+    authFetch<TwoFactorEnableData>('/two-factor/enable', opts),
+  verifyTotp: (opts: { code: string }) =>
+    authFetch('/two-factor/verify-totp', opts),
+  verifyBackupCode: (opts: { code: string }) =>
+    authFetch('/two-factor/verify-backup-code', opts),
+  sendOtp: () =>
+    authFetch('/two-factor/send-otp'),
+  verifyOtp: (opts: { code: string }) =>
+    authFetch('/two-factor/verify-otp', opts),
+};
 
 export const updateUserProfile = (fields: {
   name?: string;
   firstName?: string;
   lastName?: string;
   image?: string;
-}) => authClient.updateUser(fields as Parameters<typeof authClient.updateUser>[0]);
+}) => authFetch('/update-user', fields);
 
 export const changeUserPassword = (opts: {
   currentPassword: string;
   newPassword: string;
   revokeOtherSessions?: boolean;
-}) => (authClient as unknown as {
-  changePassword: (o: typeof opts) => Promise<TwoFactorResult>;
-}).changePassword(opts);
+}) => authFetch('/change-password', opts);
 
 export const resetUserPassword = (opts: {
   newPassword: string;
-}) => (authClient as unknown as {
-  updatePassword: (o: typeof opts) => Promise<TwoFactorResult>;
-}).updatePassword(opts);
+}) => authFetch('/update-password', opts);
 
 export const setInitialPassword = (opts: {
   newPassword: string;
-}) => (authClient as unknown as {
-  setPassword: (o: typeof opts) => Promise<TwoFactorResult>;
-}).setPassword(opts);
+}) => authFetch('/set-password', opts);
 
 export const mapAuthUserToProfile = (user: AuthUser): Profile => {
   const u = user as UserWithFields;

@@ -38,6 +38,18 @@ app.get('/me', requireAuth, async (c) => {
   });
 });
 
+app.post('/check-email', zValidator('json', z.object({
+  email: z.string().email(),
+})), async (c) => {
+  const { email } = c.req.valid('json');
+  const [existing] = await db.select({ id: users.id })
+    .from(users).where(eq(users.email, email.toLowerCase())).limit(1);
+  return c.json({
+    exists: !!existing,
+    code: existing ? 'EMAIL_ALREADY_EXISTS' : null,
+  });
+});
+
 app.get('/me/auth-providers', requireAuth, async (c) => {
   const userId = c.get('userId');
   const userAccounts = await db.select({
