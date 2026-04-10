@@ -23,6 +23,9 @@ class WsClient {
     try {
       const session = await authClient.getSession();
       const token   = (session?.data?.session as any)?.token ?? '';
+      if (!token) {
+        return;
+      }
       const url     = `${WS_URL}/ws${token ? `?token=${token}` : ''}`;
       const ws      = new WebSocket(url);
       this.ws       = ws;

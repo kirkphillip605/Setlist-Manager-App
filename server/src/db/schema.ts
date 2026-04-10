@@ -18,9 +18,17 @@ export const users = pgTable('user', {
   lastName:     text('lastName'),
   phone:        text('phone'),
   phoneVerified: boolean('phoneVerified').default(false),
-  platformRole: text('platformRole').notNull().default('user'),
-  isActive:     boolean('isActive').notNull().default(true),
-  preferences:  jsonb('preferences').default({}),
+  platformRole:      text('platformRole').notNull().default('user'),
+  isActive:          boolean('isActive').notNull().default(true),
+  isProfileComplete: boolean('isProfileComplete').notNull().default(false),
+  preferences:       jsonb('preferences').default({}),
+});
+
+export const twoFactors = pgTable('twoFactor', {
+  id:          text('id').primaryKey(),
+  secret:      text('secret').notNull(),
+  backupCodes: text('backupCodes').notNull(),
+  userId:      text('userId').notNull().references(() => users.id, { onDelete: 'cascade' }).unique(),
 });
 
 export const sessions = pgTable('session', {

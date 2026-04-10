@@ -37,8 +37,6 @@ const Login = () => {
   const [loading, setLoading]         = useState(false);
   const [email, setEmail]             = useState('');
   const [password, setPassword]       = useState('');
-  const [firstName, setFirstName]     = useState('');
-  const [lastName, setLastName]       = useState('');
   const [rememberMe, setRememberMe]   = useState(false);
   const [isDarkMode, setIsDarkMode]   = useState(false);
   const [resetEmail, setResetEmail]   = useState('');
@@ -50,11 +48,11 @@ const Login = () => {
   const [otpValue, setOtpValue]         = useState('');
   const [magicLinkSent, setMagicLinkSent] = useState(false);
 
-  const { data: sessionData } = authClient.useSession();
-
   useEffect(() => {
-    if (sessionData?.user) navigate('/');
-  }, [sessionData, navigate]);
+    authClient.getSession().then(({ data }) => {
+      if (data?.user) navigate('/');
+    });
+  }, [navigate]);
 
   useEffect(() => {
     if (theme === 'system') {
@@ -96,11 +94,20 @@ const Login = () => {
     setLoading(true);
     await persistEmail();
 
-    const { error } = await authClient.signIn.email({ email: email.trim(), password });
-    if (error) {
-      toast.error(error.message ?? 'Sign in failed');
+    const result = await authClient.signIn.email({ email: email.trim(), password });
+    if (result.error) {
+      const msg = result.error.message ?? '';
+      if (msg.toLowerCase().includes('two factor') || msg.toLowerCase().includes('2fa') || (result.error as any).code === 'TWO_FACTOR_REQUIRED') {
+        navigate('/2fa-challenge');
+      } else {
+        toast.error(msg || 'Sign in failed');
+      }
     } else {
-      navigate('/');
+      if ((result.data as any)?.twoFactorRedirect) {
+        navigate('/2fa-challenge');
+      } else {
+        navigate('/');
+      }
     }
     setLoading(false);
   };
@@ -151,27 +158,33 @@ const Login = () => {
     setLoading(true);
 
     try {
-      const { error } = await authClient.signIn.emailOtp({
+      const result = await authClient.signIn.emailOtp({
         email: email.trim(),
         otp: otpValue,
       });
-      if (error) throw new Error(error.message ?? 'Invalid code');
-      navigate('/');
+      if (result.error) throw new Error(result.error.message ?? 'Invalid code');
+      if ((result.data as any)?.twoFactorRedirect) {
+        navigate('/2fa-challenge');
+      } else {
+        navigate('/');
+      }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Verification failed');
     }
     setLoading(false);
   };
 
+  const [activeTab, setActiveTab] = useState<string>('login');
+  const [convergenceEmail, setConvergenceEmail] = useState<string | null>(null);
+
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
-    const name = [firstName, lastName].filter(Boolean).join(' ') || email;
     const { error } = await authClient.signUp.email({
       email:     email.trim(),
       password,
-      name,
+      name:      email.trim(),
       callbackURL: getCallbackUrl(),
       fetchOptions: {
         onSuccess: () => {
@@ -181,7 +194,16 @@ const Login = () => {
       },
     } as any);
 
-    if (error) toast.error(error.message ?? 'Sign up failed');
+    if (error) {
+      const msg = error.message ?? '';
+      if (msg.toLowerCase().includes('already') || msg.toLowerCase().includes('exists') || error.status === 409) {
+        setConvergenceEmail(email.trim());
+        setActiveTab('login');
+        toast.info('An account with this email already exists. Please sign in instead.');
+      } else {
+        toast.error(msg || 'Sign up failed');
+      }
+    }
     setLoading(false);
   };
 
@@ -432,13 +454,19 @@ const Login = () => {
           </div>
         </CardHeader>
         <CardContent>
-          <Tabs defaultValue="login" className="w-full">
+          <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v); setConvergenceEmail(null); }} className="w-full">
             <TabsList className="grid w-full grid-cols-2 mb-4 h-9">
               <TabsTrigger value="login"    className="text-xs">Sign In</TabsTrigger>
               <TabsTrigger value="register" className="text-xs">Create Account</TabsTrigger>
             </TabsList>
 
             <TabsContent value="login">
+              {convergenceEmail && (
+                <div className="mb-4 p-3 rounded-lg bg-blue-500/10 border border-blue-500/20 text-sm text-center">
+                  <p className="font-medium">Account found for {convergenceEmail}</p>
+                  <p className="text-xs text-muted-foreground mt-1">Choose a sign-in method below.</p>
+                </div>
+              )}
               {renderSignInMethodSelector()}
 
               {signInMethod === 'password' && renderPasswordForm()}
@@ -484,24 +512,6 @@ const Login = () => {
 
             <TabsContent value="register">
               <form onSubmit={handleSignUp} className="space-y-4">
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-2">
-                    <Label htmlFor="first-name">First Name</Label>
-                    <Input
-                      id="first-name" type="text" placeholder="Jane"
-                      value={firstName} onChange={e => setFirstName(e.target.value)}
-                      autoComplete="given-name"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="last-name">Last Name</Label>
-                    <Input
-                      id="last-name" type="text" placeholder="Smith"
-                      value={lastName} onChange={e => setLastName(e.target.value)}
-                      autoComplete="family-name"
-                    />
-                  </div>
-                </div>
                 <div className="space-y-2">
                   <Label htmlFor="email-register">Email</Label>
                   <Input

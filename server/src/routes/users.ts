@@ -3,8 +3,9 @@ import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
 import { db } from '../db/index.js';
 import { users, bandMemberships, bands } from '../db/schema.js';
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, isNull, ne } from 'drizzle-orm';
 import { requireAuth, requirePlatformAdmin, type AuthVariables } from '../middleware/auth.js';
+import { sendPhoneReassignmentEmail } from '../lib/email.js';
 
 const app = new Hono<{ Variables: AuthVariables }>();
 
@@ -24,14 +25,15 @@ app.get('/me', requireAuth, async (c) => {
     .where(and(eq(bandMemberships.userId, userId), isNull(bandMemberships.deletedAt), isNull(bands.deletedAt)));
 
   return c.json({
-    id:            user.id,
-    email:         user.email,
-    first_name:    user.firstName,
-    last_name:     user.lastName,
-    avatar_url:    user.image,
-    platform_role: user.platformRole,
-    is_active:     user.isActive,
-    preferences:   user.preferences,
+    id:                  user.id,
+    email:               user.email,
+    first_name:          user.firstName,
+    last_name:           user.lastName,
+    avatar_url:          user.image,
+    platform_role:       user.platformRole,
+    is_active:           user.isActive,
+    is_profile_complete: user.isProfileComplete,
+    preferences:         user.preferences,
     bands: memberships.map(r => ({ ...r.band, membership: r.membership })),
   });
 });
@@ -52,16 +54,73 @@ app.patch('/me', requireAuth,
     if (body.last_name   !== undefined) updates.lastName    = body.last_name;
     if (body.preferences !== undefined) updates.preferences = body.preferences;
 
+    const [current] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+    const finalFirstName = (body.first_name ?? current?.firstName) || null;
+    const finalLastName  = (body.last_name  ?? current?.lastName)  || null;
+    if (finalFirstName && finalLastName && !current?.isProfileComplete) {
+      updates.isProfileComplete = true;
+    }
+
     const [user] = await db.update(users).set(updates).where(eq(users.id, userId)).returning();
     return c.json({
-      id:            user.id,
-      email:         user.email,
-      first_name:    user.firstName,
-      last_name:     user.lastName,
-      avatar_url:    user.image,
-      platform_role: user.platformRole,
-      is_active:     user.isActive,
-      preferences:   user.preferences,
+      id:                  user.id,
+      email:               user.email,
+      first_name:          user.firstName,
+      last_name:           user.lastName,
+      avatar_url:          user.image,
+      platform_role:       user.platformRole,
+      is_active:           user.isActive,
+      is_profile_complete: user.isProfileComplete,
+      preferences:         user.preferences,
+    });
+  }
+);
+
+// POST /api/users/me/reassign-phone — reassign verified phone number from another user
+// This should only be called AFTER the phone has been verified via BetterAuth's phone OTP flow.
+// The caller must pass the verified phone number; the server checks that the current user
+// already has this phone marked as verified (set by BetterAuth's phoneNumber plugin),
+// then handles reassignment from any previous owner.
+app.post('/me/reassign-phone', requireAuth,
+  zValidator('json', z.object({
+    phone: z.string().min(1),
+  })),
+  async (c) => {
+    const userId = c.get('userId');
+    const { phone } = c.req.valid('json');
+
+    const [currentUser] = await db.select()
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+
+    if (!currentUser || currentUser.phone !== phone || !currentUser.phoneVerified) {
+      return c.json({ error: 'Phone number must be verified via OTP before reassignment' }, 400);
+    }
+
+    const [existingUser] = await db.select()
+      .from(users)
+      .where(and(eq(users.phone, phone), ne(users.id, userId)))
+      .limit(1);
+
+    if (existingUser) {
+      await db.update(users)
+        .set({ phone: null, phoneVerified: false, updatedAt: new Date() })
+        .where(eq(users.id, existingUser.id));
+
+      try {
+        if (existingUser.email) {
+          await sendPhoneReassignmentEmail(existingUser.email, phone, existingUser.firstName ?? undefined);
+        }
+      } catch (err) {
+        console.error('[Users] Failed to send phone reassignment notification:', err);
+      }
+    }
+
+    return c.json({
+      id:            currentUser.id,
+      phone:         currentUser.phone,
+      phoneVerified: currentUser.phoneVerified,
     });
   }
 );

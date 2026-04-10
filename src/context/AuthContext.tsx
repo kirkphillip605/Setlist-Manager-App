@@ -90,7 +90,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     canManageGigs,
     canEditSetlist,
     signOut:        handleSignOut,
-    refreshProfile: () => authClient.getSession(),
+    refreshProfile: () => authClient.getSession({ fetchOptions: { headers: { 'cache-control': 'no-cache' } } } as any),
     checkSession,
   };
 

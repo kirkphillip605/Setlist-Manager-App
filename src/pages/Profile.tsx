@@ -54,6 +54,12 @@ const Profile = () => {
     e.preventDefault();
     setSaving(true);
     try {
+      await authClient.updateUser({
+        name: `${firstName.trim()} ${lastName.trim()}`,
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+      } as any);
+
       await apiPatch('/api/users/me', {
         first_name: firstName.trim(),
         last_name:  lastName.trim(),

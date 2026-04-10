@@ -7,8 +7,8 @@ A React + Vite PWA / Capacitor app for band setlist and gig management with full
 ### Frontend
 - **Framework**: React 18 + Vite 5 + TypeScript
 - **Routing**: React Router v6
-- **Auth**: BetterAuth client (`better-auth/react`) — email/password, Google OAuth, magic link, email OTP, phone/SMS
-- **Auth Plugins**: `emailAndPasswordClient`, `magicLinkClient`, `emailOTPClient`, `phoneNumberClient`, `inferAdditionalFields`
+- **Auth**: BetterAuth client (`better-auth/react`) — email/password, Google OAuth, magic link, email OTP, phone/SMS, 2FA
+- **Auth Plugins**: `emailAndPasswordClient`, `magicLinkClient`, `emailOTPClient`, `phoneNumberClient`, `twoFactorClient`, `inferAdditionalFields`
 - **State**: Zustand (per-band store with bootstrap/delta sync), TanStack Query (offline-persist)
 - **Styling**: Tailwind CSS + shadcn/ui
 - **Real-time**: WebSocket client (`src/lib/wsClient.ts`)
@@ -18,7 +18,7 @@ A React + Vite PWA / Capacitor app for band setlist and gig management with full
 
 ### Backend (Hono + BetterAuth)
 - **Server**: Hono (Node.js) at `api.setlist.kirknet.io`
-- **Auth**: BetterAuth with plugins: `bearer`, `magicLink`, `emailOTP`, `phoneNumber`
+- **Auth**: BetterAuth with plugins: `bearer`, `magicLink`, `emailOTP`, `phoneNumber`, `twoFactor` + built-in rate limiting
 - **Email**: Mailjet transactional email (`server/src/lib/email.ts`)
 - **SMS**: Twilio (`server/src/lib/sms.ts`)
 - **Database**: PostgreSQL via Drizzle ORM (`server/src/db/`)
@@ -71,9 +71,28 @@ A React + Vite PWA / Capacitor app for band setlist and gig management with full
 1. Sign in via email/password, Google OAuth, magic link, or email OTP
 2. BetterAuth sets an httpOnly session cookie (365-day expiry by default)
 3. `AuthContext` uses `authClient.useSession()` for reactive session state
-4. `ProtectedRoute` checks: logged in → account active → profile complete → has ≥1 band
-5. If no bands → `/bands/setup` (create or join)
-6. Bearer token plugin enables API auth for mobile apps without cookies
+4. `ProtectedRoute` checks: logged in → account active → profile complete (`isProfileComplete`) → has ≥1 band
+5. If profile incomplete → `/onboarding` (name entry, then optional 2FA prompt)
+6. If no bands → `/bands/setup` (create or join)
+7. Bearer token plugin enables API auth for mobile apps without cookies
+8. 2FA (TOTP) intercepts login when enabled — challenge screen at `/2fa-challenge`
+9. Rate limiting enforced server-side (30 req/60s window)
+
+### Auth Bug Fixes Applied
+- **Onboarding loop fixed**: `authClient.updateUser()` updates BetterAuth session cache atomically alongside `apiPatch` to `/api/users/me`
+- **No excessive polling**: Login page uses one-shot `authClient.getSession()` instead of `useSession()` polling hook; WS client guards against no-session connections
+- **Sign-up convergence**: Attempting to sign up with an existing email transitions to Sign In tab with email pre-filled
+- **Name fields removed from sign-up**: Registration only collects email + password; name is collected during onboarding
+
+### 2FA Support
+- TOTP-based two-factor auth via BetterAuth's `twoFactor` plugin
+- Setup wizard at `/2fa-setup` with QR code, verify, and recovery code confirmation
+- Challenge screen at `/2fa-challenge` with TOTP or recovery code options
+- Prompted (but skippable) after onboarding completion
+
+### Phone Number Reassignment
+- `POST /api/users/me/reassign-phone` transfers verified numbers between users
+- Previous owner notified via transactional email
 
 ## Session Persistence
 
