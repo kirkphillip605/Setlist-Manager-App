@@ -38,12 +38,31 @@ app.get('/me', requireAuth, async (c) => {
   });
 });
 
+const emailCheckLimiter = new Map<string, { count: number; resetAt: number }>();
+const EMAIL_CHECK_WINDOW = 60_000;
+const EMAIL_CHECK_MAX = 5;
+
 app.post('/check-email', zValidator('json', z.object({
   email: z.string().email(),
 })), async (c) => {
+  const ip = c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown';
+  const now = Date.now();
+  const entry = emailCheckLimiter.get(ip);
+  if (entry && entry.resetAt > now) {
+    if (entry.count >= EMAIL_CHECK_MAX) {
+      return c.json({ error: 'Too many requests' }, 429);
+    }
+    entry.count++;
+  } else {
+    emailCheckLimiter.set(ip, { count: 1, resetAt: now + EMAIL_CHECK_WINDOW });
+  }
+
   const { email } = c.req.valid('json');
   const [existing] = await db.select({ id: users.id })
     .from(users).where(eq(users.email, email.toLowerCase())).limit(1);
+
+  await new Promise(r => setTimeout(r, 200 + Math.random() * 300));
+
   return c.json({
     exists: !!existing,
     code: existing ? 'EMAIL_ALREADY_EXISTS' : null,

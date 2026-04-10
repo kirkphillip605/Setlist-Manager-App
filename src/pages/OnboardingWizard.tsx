@@ -53,7 +53,7 @@ const OnboardingWizard = () => {
   }, [profile, user]);
 
   const advanceAfterName = () => {
-    if (providerInfo && !providerInfo.hasPassword && providerInfo.hasOAuth) {
+    if (providerInfo && !providerInfo.hasPassword) {
       setStep('password');
     } else {
       setStep('2fa-prompt');
@@ -134,7 +134,7 @@ const OnboardingWizard = () => {
             </div>
             <CardTitle className="text-2xl">Set a Password</CardTitle>
             <CardDescription>
-              You signed in with Google. Set a password so you can also sign in with your email.
+              Set a password so you can also sign in with your email and password.
             </CardDescription>
           </CardHeader>
 
