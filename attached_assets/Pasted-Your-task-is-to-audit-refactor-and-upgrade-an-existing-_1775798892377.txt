@@ -1,0 +1,77 @@
+Your task is to audit, refactor, and upgrade an existing better-auth implementation into a highly intelligent, enterprise-grade user authentication and onboarding system.
+
+Phase 1: Codebase Audit & Schema Migration
+Before writing new features, review my existing auth.ts configuration, database schema, and authentication-related UI components. You must map out the necessary PostgreSQL schema updates (e.g., adding isProfileComplete flags, audit_logs tables, and two_factor models) and provide the exact migration commands or SQL required to update the database safely.
+
+Phase 2: Core Upgrade Objectives
+Refactor the existing system to achieve a unified, frictionless authentication flow that prioritizes data completeness, graceful error handling, and progressive profiling. Ensure all UI components utilize a modern, clean, "glass UI" aesthetic with appropriate depth (avoiding flat or tacky visual effects).
+
+The minimum requirement for an account to be considered "active and complete" is: Email, Password, First Name, and Last Name. Utilize the appropriate Better Auth plugins (phone-number, magic-link, rate-limit, two-factor, etc.) to implement the following:
+
+1. Multi-Modal Sign-Up & The Interception Wall:
+
+Initial Entry: Users can sign in/up via Email/Password, Mobile OTP, or Google OAuth.
+
+The Completion Wall: Refactor our route middleware. Regardless of the initial sign-up method, if isProfileComplete is false, route the user to a mandatory onboarding flow.
+
+If Google Auth: Extract first/last name and email. Prompt the user to create a mandatory password. Offer an optional step to add/verify a mobile number.
+
+If Email/Password: Prompt for First/Last name. Offer an optional step to verify a mobile number and connect their Google account.
+
+If Mobile OTP: Prompt for Email, Password, First Name, and Last Name.
+
+2. Optional Multi-Factor Authentication (2FA) Onboarding:
+
+The 2FA Wall: Immediately after isProfileComplete evaluates to true, route the user to a skippable "Secure Your Account" step.
+
+2FA Options: Present a streamlined wizard allowing the user to enable 2FA using:
+
+Authenticator App (TOTP): Generate/display the QR code and require a test code.
+
+SMS/Mobile OTP (if a verified phone number exists).
+
+Email OTP.
+
+Recovery Codes: Require the user to confirm they have saved generated recovery codes before proceeding.
+
+Login Challenge: Build a unified 2FA challenge screen that seamlessly intercepts the standard login flow.
+
+3. Intelligent Convergence (Sign-Up / Sign-In Merging):
+
+Eliminate generic "Account already exists" registration errors.
+
+If a user attempts to sign up with an existing email, dynamically intercept the request, inform them the account exists, and transition the UI to a sign-in state (offering Password, Magic Link, or OTP).
+
+4. Dynamic Phone Number Ownership & Reassignment:
+
+If a user attempts to verify a phone number already attached to another profile, do not block it with a unique constraint error.
+
+Send the OTP. Upon successful verification:
+
+Remove the phone number from the previous user's profile.
+
+Assign it as verified to the new user.
+
+Trigger an asynchronous transactional email to the previous user: "The mobile number (XXX) XXX-XXXX has been removed from your profile."
+
+5. Security Notifications & Audit Trails:
+
+Implement event listeners using Better Auth's database hooks or webhooks.
+
+Send transactional notifications for security events (e.g., "Google Account connected," "2FA enabled," "Recovery Code used").
+
+Log all authentication failures (failed OTPs, incorrect passwords, failed 2FA) in a dedicated audit_logs table (timestamp, IP, user-agent).
+
+6. Rate Limiting & Brute Force Protection:
+
+Implement/configure the @better-auth/rate-limit plugin.
+
+Apply progressive, exponential backoff for incorrect passwords, failed 2FA/OTPs (to protect SMS vendor costs), and password resets.
+
+7. Enterprise Security Overrides:
+
+Session Invalidation: Ensure password changes or suspected breaches immediately revoke all active sessions except the current one.
+
+Concurrent Sessions: Build a profile settings component listing active sessions (Device, Location, Last Active) with remote logout capabilities.
+
+CSRF & Secure Cookies: Enforce Secure, HttpOnly, and SameSite=Lax (or Strict) cookies based on the environment.
