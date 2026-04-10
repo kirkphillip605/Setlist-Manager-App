@@ -43,13 +43,26 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   useEffect(() => {
     let mounted = true;
+    const hasKnownSession = sessionStorage.getItem('auth_active') === '1';
+    if (!hasKnownSession && window.location.pathname === '/login') {
+      setIsPending(false);
+      return;
+    }
     authClient.getSession().then(({ data }) => {
       if (mounted) {
+        if (data?.user) {
+          sessionStorage.setItem('auth_active', '1');
+        } else {
+          sessionStorage.removeItem('auth_active');
+        }
         setUser(data?.user ?? null);
         setIsPending(false);
       }
     }).catch(() => {
-      if (mounted) setIsPending(false);
+      if (mounted) {
+        sessionStorage.removeItem('auth_active');
+        setIsPending(false);
+      }
     });
     return () => { mounted = false; };
   }, []);
@@ -69,6 +82,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
 
     setUser(null);
+    sessionStorage.removeItem('auth_active');
 
     try {
       queryClient.removeQueries();
@@ -88,6 +102,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const checkSession = useCallback(async () => {
     const { data } = await authClient.getSession();
+    if (data?.user) {
+      sessionStorage.setItem('auth_active', '1');
+    }
     setUser(data?.user ?? null);
   }, []);
 

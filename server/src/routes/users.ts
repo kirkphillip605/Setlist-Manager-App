@@ -6,6 +6,7 @@ import { users, accounts, bandMemberships, bands } from '../db/schema.js';
 import { and, eq, isNull, ne } from 'drizzle-orm';
 import { requireAuth, requirePlatformAdmin, type AuthVariables } from '../middleware/auth.js';
 import { sendPhoneReassignmentEmail } from '../lib/email.js';
+import { auth } from '../auth.js';
 
 const app = new Hono<{ Variables: AuthVariables }>();
 
@@ -102,11 +103,13 @@ app.patch('/me', requireAuth,
     const finalFirstName = (body.first_name ?? current?.firstName) || null;
     const finalLastName  = (body.last_name  ?? current?.lastName)  || null;
 
+    let shouldCompleteProfile = false;
     if (finalFirstName && finalLastName && !current?.isProfileComplete) {
       const userAccounts = await db.select({ providerId: accounts.providerId })
         .from(accounts).where(eq(accounts.userId, userId));
       const hasCredential = userAccounts.some(a => a.providerId === 'credential');
       if (hasCredential) {
+        shouldCompleteProfile = true;
         updates.isProfileComplete = true;
       }
     }
@@ -142,13 +145,13 @@ app.post('/me/complete-profile', requireAuth, async (c) => {
     return c.json({ error: 'Password is required before completing profile', code: 'MISSING_PASSWORD' }, 400);
   }
 
-  const [user] = await db.update(users)
-    .set({ isProfileComplete: true, updatedAt: new Date() })
-    .where(eq(users.id, userId))
-    .returning();
+  await auth.api.updateUser({
+    body: { isProfileComplete: true },
+    headers: c.req.raw.headers,
+  });
 
   return c.json({
-    is_profile_complete: user.isProfileComplete,
+    is_profile_complete: true,
   });
 });
 
