@@ -163,7 +163,7 @@ app.get('/version', requireAuth, async (c) => {
   const bandId = c.req.query('band_id');
   if (!bandId) return c.json({ error: 'band_id required' }, 400);
 
-  const [membership] = await db.select({ id: bandMemberships.id }).from(bandMemberships)
+  const [membership] = await db.select({ id: bandMemberships.id, isApproved: bandMemberships.isApproved }).from(bandMemberships)
     .where(and(
       eq(bandMemberships.bandId, bandId),
       eq(bandMemberships.userId, userId),
@@ -171,6 +171,7 @@ app.get('/version', requireAuth, async (c) => {
     )).limit(1);
 
   if (!membership) return c.json({ error: 'Forbidden' }, 403);
+  if (!membership.isApproved) return c.json({ error: 'Membership pending approval' }, 403);
 
   const result = await db.execute<{ v: string }>(
     sql`SELECT get_current_band_version(${bandId}::uuid) AS v`

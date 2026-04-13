@@ -5,7 +5,7 @@ import { db } from '../db/index.js';
 import { setlists, sets, setSongs, songs, gigs, gigSessions } from '../db/schema.js';
 import { and, eq, isNull, inArray } from 'drizzle-orm';
 import { requireAuth } from '../middleware/auth.js';
-import { requireBandMember, requireBandManager, type BandVariables } from '../middleware/band.js';
+import { requireBandMember, type BandVariables } from '../middleware/band.js';
 import { toSnakeCase, toSnakeCaseArray } from '../utils/caseTransform.js';
 
 const app = new Hono<{ Variables: BandVariables }>();
@@ -85,7 +85,7 @@ app.get('/:id', requireAuth, requireBandMember, async (c) => {
 });
 
 // POST /api/bands/:bandId/setlists
-app.post('/', requireAuth, requireBandMember, requireBandManager,
+app.post('/', requireAuth, requireBandMember,
   zValidator('json', z.object({
     name:        z.string().min(1).max(200),
     is_personal: z.boolean().default(false),
@@ -95,6 +95,14 @@ app.post('/', requireAuth, requireBandMember, requireBandManager,
     const bandId = c.get('bandId');
     const userId = c.get('userId');
     const { name, is_personal, is_default } = c.req.valid('json');
+    const role = c.get('bandRole');
+    const isManagerOrAbove = role === 'owner' || role === 'manager' || role === 'platform_staff' || role === 'platform_admin';
+    if (!is_personal && !isManagerOrAbove) {
+      return c.json({ error: 'Forbidden: band manager or owner required' }, 403);
+    }
+    if (is_default && !isManagerOrAbove) {
+      return c.json({ error: 'Forbidden: only managers can set a default setlist' }, 403);
+    }
 
     if (is_default) {
       await db.update(setlists).set({ isDefault: false })
@@ -110,7 +118,7 @@ app.post('/', requireAuth, requireBandMember, requireBandManager,
 );
 
 // PATCH /api/bands/:bandId/setlists/:id
-app.patch('/:id', requireAuth, requireBandMember, requireBandManager,
+app.patch('/:id', requireAuth, requireBandMember,
   zValidator('json', z.object({
     name:        z.string().min(1).max(200).optional(),
     is_personal: z.boolean().optional(),
@@ -118,8 +126,29 @@ app.patch('/:id', requireAuth, requireBandMember, requireBandManager,
   })),
   async (c) => {
     const bandId = c.get('bandId');
+    const userId = c.get('userId');
     const id = c.req.param('id');
     const body = c.req.valid('json');
+
+    const [existing] = await db.select().from(setlists)
+      .where(and(eq(setlists.id, id), eq(setlists.bandId, bandId), isNull(setlists.deletedAt)))
+      .limit(1);
+    if (!existing) return c.json({ error: 'Setlist not found' }, 404);
+
+    const role = c.get('bandRole');
+    const isManagerOrAbove = role === 'owner' || role === 'manager' || role === 'platform_staff' || role === 'platform_admin';
+    const isOwnPersonal = existing.isPersonal && existing.createdBy === userId;
+    if (!isManagerOrAbove && !isOwnPersonal) {
+      return c.json({ error: 'Forbidden: band manager or owner required' }, 403);
+    }
+    if (!isManagerOrAbove) {
+      if (body.is_personal === false) {
+        return c.json({ error: 'Forbidden: only managers can convert a personal setlist to band setlist' }, 403);
+      }
+      if (body.is_default) {
+        return c.json({ error: 'Forbidden: only managers can set a default setlist' }, 403);
+      }
+    }
 
     // Check for active sessions on this setlist
     const gigsUsingSetlist = await db.select({ id: gigs.id }).from(gigs)
@@ -154,10 +183,22 @@ app.patch('/:id', requireAuth, requireBandMember, requireBandManager,
 );
 
 // DELETE /api/bands/:bandId/setlists/:id
-app.delete('/:id', requireAuth, requireBandMember, requireBandManager, async (c) => {
+app.delete('/:id', requireAuth, requireBandMember, async (c) => {
   const bandId = c.get('bandId');
   const userId = c.get('userId');
   const id = c.req.param('id');
+
+  const [existing] = await db.select().from(setlists)
+    .where(and(eq(setlists.id, id), eq(setlists.bandId, bandId), isNull(setlists.deletedAt)))
+    .limit(1);
+  if (!existing) return c.json({ error: 'Setlist not found' }, 404);
+
+  const role = c.get('bandRole');
+  const isManagerOrAbove = role === 'owner' || role === 'manager' || role === 'platform_staff' || role === 'platform_admin';
+  const isOwnPersonal = existing.isPersonal && existing.createdBy === userId;
+  if (!isManagerOrAbove && !isOwnPersonal) {
+    return c.json({ error: 'Forbidden: band manager or owner required' }, 403);
+  }
 
   await db.update(setlists)
     .set({ deletedAt: new Date(), deletedBy: userId })
@@ -178,7 +219,7 @@ app.get('/:id/usage', requireAuth, requireBandMember, async (c) => {
 });
 
 // POST /api/bands/:bandId/setlists/:id/sync — full setlist sync (editor save)
-app.post('/:id/sync', requireAuth, requireBandMember, requireBandManager,
+app.post('/:id/sync', requireAuth, requireBandMember,
   zValidator('json', z.object({
     name: z.string().min(1).max(200).optional(),
     sets: z.array(z.object({
@@ -197,6 +238,18 @@ app.post('/:id/sync', requireAuth, requireBandMember, requireBandManager,
     const userId = c.get('userId');
     const setlistId = c.req.param('id');
     const body = c.req.valid('json');
+
+    const [existing] = await db.select().from(setlists)
+      .where(and(eq(setlists.id, setlistId), eq(setlists.bandId, bandId), isNull(setlists.deletedAt)))
+      .limit(1);
+    if (!existing) return c.json({ error: 'Setlist not found' }, 404);
+
+    const role = c.get('bandRole');
+    const isManagerOrAbove = role === 'owner' || role === 'manager' || role === 'platform_staff' || role === 'platform_admin';
+    const isOwnPersonal = existing.isPersonal && existing.createdBy === userId;
+    if (!isManagerOrAbove && !isOwnPersonal) {
+      return c.json({ error: 'Forbidden: band manager or owner required' }, 403);
+    }
 
     // Check for active sessions
     const gigsUsing = await db.select({ id: gigs.id }).from(gigs)
@@ -279,7 +332,7 @@ app.post('/:id/sync', requireAuth, requireBandMember, requireBandManager,
 );
 
 // POST /api/bands/:bandId/setlists/:id/clone
-app.post('/:id/clone', requireAuth, requireBandMember, requireBandManager,
+app.post('/:id/clone', requireAuth, requireBandMember,
   zValidator('json', z.object({
     name:        z.string().min(1).max(200),
     is_personal: z.boolean().default(false),
@@ -289,6 +342,12 @@ app.post('/:id/clone', requireAuth, requireBandMember, requireBandManager,
     const userId = c.get('userId');
     const sourceId = c.req.param('id');
     const { name, is_personal } = c.req.valid('json');
+
+    const role = c.get('bandRole');
+    const isManagerOrAbove = role === 'owner' || role === 'manager' || role === 'platform_staff' || role === 'platform_admin';
+    if (!is_personal && !isManagerOrAbove) {
+      return c.json({ error: 'Forbidden: band manager or owner required' }, 403);
+    }
 
     const [source] = await db.select().from(setlists)
       .where(and(eq(setlists.id, sourceId), eq(setlists.bandId, bandId), isNull(setlists.deletedAt)))

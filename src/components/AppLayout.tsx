@@ -30,7 +30,7 @@ interface AppLayoutProps {
 const AppLayout = ({ children }: AppLayoutProps) => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { signOut, isAdmin } = useAuth();
+  const { signOut } = useAuth();
   const { activeBand } = useBand();
   const { isImmersive } = useImmersiveMode();
   
@@ -120,7 +120,7 @@ const AppLayout = ({ children }: AppLayoutProps) => {
 
   return (
     <div className={layoutContainerClass}>
-      {isAdmin && <PendingApprovalNotifier />}
+      <PendingApprovalNotifier />
       <ActiveSessionBanner />
 
       {/* Controlled Main Menu Sheet (Triggered by Settings) */}

@@ -14,8 +14,6 @@ interface AuthContextType {
   profile:        Profile | null;
   loading:        boolean;
   isAdmin:        boolean;
-  isManager:      boolean;
-  canManageGigs:  boolean;
   canEditSetlist: (setlist: Setlist, bandRole?: string) => boolean;
   signOut:        () => Promise<void>;
   refreshProfile: () => Promise<void>;
@@ -27,8 +25,6 @@ const AuthContext = createContext<AuthContextType>({
   profile:        null,
   loading:        true,
   isAdmin:        false,
-  isManager:      false,
-  canManageGigs:  false,
   canEditSetlist: () => false,
   signOut:        async () => {},
   refreshProfile: async () => {},
@@ -92,9 +88,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   }, []);
 
   const isAdmin      = profile?.platformRole === 'platform_admin';
-  const isManager    = isAdmin;
-
-  const canManageGigs = isAdmin;
 
   const canEditSetlist = useCallback((setlist: Setlist, bandRole?: string) => {
     if (isAdmin) return true;
@@ -108,8 +101,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     profile,
     loading:        isPending,
     isAdmin,
-    isManager,
-    canManageGigs,
     canEditSetlist,
     signOut:        handleSignOut,
     refreshProfile,

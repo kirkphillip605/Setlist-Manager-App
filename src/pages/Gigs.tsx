@@ -22,7 +22,6 @@ import { useNetworkStatus } from "@/hooks/useNetworkStatus";
 import { LoadingDialog } from "@/components/LoadingDialog";
 import { format, parseISO } from "date-fns";
 import { GigCreateWizard } from "@/components/GigCreateWizard";
-import { useAuth } from "@/context/AuthContext";
 import { useBand } from "@/context/BandContext";
 import { PerformanceSessionDialog } from "@/components/PerformanceSessionDialog";
 
@@ -30,8 +29,7 @@ const Gigs = () => {
     const navigate = useNavigate();
     const queryClient = useQueryClient();
     const isOnline = useNetworkStatus();
-    const { canManageGigs } = useAuth();
-    const { activeBandId } = useBand();
+    const { activeBandId, isManager: canManageGigs } = useBand();
     
     const [isCreateOpen, setIsCreateOpen] = useState(false);
     const [showPast, setShowPast] = useState(false);

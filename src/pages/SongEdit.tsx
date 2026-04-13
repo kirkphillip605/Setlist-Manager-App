@@ -23,7 +23,13 @@ const SongEdit = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const isOnline = useNetworkStatus();
-  const { activeBandId } = useBand();
+  const { activeBandId, isManager: canManageSongs } = useBand();
+
+  useEffect(() => {
+    if (!canManageSongs) {
+      navigate(id ? `/songs/${id}` : '/songs', { replace: true });
+    }
+  }, [canManageSongs, id, navigate]);
   
   // Logic: If no ID, we are adding. If ID, we are editing.
   // If Adding and Offline -> Block (Can't search spotify, can't sync).

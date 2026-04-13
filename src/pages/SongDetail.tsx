@@ -60,7 +60,7 @@ const SongDetail = () => {
   const { openMetronome, closeMetronome, isPlaying, bpm, isOpen } = useMetronome();
   
   const { isAdmin } = useAuth();
-  const { activeBandId } = useBand();
+  const { activeBandId, isManager: canManageSongs } = useBand();
   const [isFetchingDetails, setIsFetchingDetails] = useState(false);
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -252,7 +252,7 @@ const SongDetail = () => {
                 </Button>
             )}
             
-            {isOnline && (
+            {canManageSongs && isOnline && (
                 <Button asChild variant="outline" size="icon">
                 <Link to={`/songs/${id}/edit`}>
                     <Edit className="h-4 w-4" />
@@ -368,8 +368,8 @@ const SongDetail = () => {
           </Card>
         </motion.div>
 
-        {/* Danger Zone - Only Online */}
-        {isOnline && (
+        {/* Danger Zone - Only Online, Only Managers/Owners */}
+        {canManageSongs && isOnline && (
             <Card className="border-destructive/30 bg-destructive/5 mt-8 overflow-hidden">
                 <CardHeader className="border-b border-destructive/10 bg-destructive/10 py-3">
                     <CardTitle className="text-base font-semibold flex items-center gap-2 text-destructive">

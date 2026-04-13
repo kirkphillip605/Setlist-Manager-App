@@ -25,7 +25,7 @@ import { LoadingDialog } from "@/components/LoadingDialog";
 import { AlbumArtwork } from "@/components/AlbumArtwork";
 import { useBand } from "@/context/BandContext";
 
-const SongListItem = ({ song, onDeleteRequest, isOnline }: { song: Song; onDeleteRequest: (song: Song) => void; isOnline: boolean }) => {
+const SongListItem = ({ song, onDeleteRequest, isOnline, canManage }: { song: Song; onDeleteRequest: (song: Song) => void; isOnline: boolean; canManage: boolean }) => {
   const navigate = useNavigate();
   const controls = useAnimation();
   
@@ -33,8 +33,7 @@ const SongListItem = ({ song, onDeleteRequest, isOnline }: { song: Song; onDelet
     const offset = info.offset.x;
     const velocity = info.velocity.x;
 
-    // Swipe actions only when online
-    if (!isOnline) {
+    if (!isOnline || !canManage) {
          controls.start({ x: 0 });
          return;
     }
@@ -51,8 +50,7 @@ const SongListItem = ({ song, onDeleteRequest, isOnline }: { song: Song; onDelet
 
   return (
     <div className="relative mb-3 group">
-      {/* Swipe Actions Background (Only visible if online) */}
-      {isOnline && (
+      {isOnline && canManage && (
           <div className="absolute inset-0 flex items-center justify-between rounded-xl overflow-hidden my-0.5">
             <div className="h-full w-1/2 bg-blue-500/10 flex items-center justify-start pl-6 rounded-l-xl">
               <Edit className="text-blue-600" />
@@ -64,7 +62,7 @@ const SongListItem = ({ song, onDeleteRequest, isOnline }: { song: Song; onDelet
       )}
 
       <motion.div
-        drag={isOnline ? "x" : false} // Disable drag offline
+        drag={isOnline && canManage ? "x" : false}
         dragConstraints={{ left: 0, right: 0 }}
         dragElastic={0.2}
         onDragEnd={handleDragEnd}
@@ -129,7 +127,7 @@ const SongList = () => {
 
   const queryClient = useQueryClient();
   const isOnline = useNetworkStatus();
-  const { activeBandId } = useBand();
+  const { activeBandId, isManager: canManageSongs } = useBand();
 
   // Use the Synced Hook (Master Catalog)
   const { data: songs = [], isLoading } = useSyncedSongs();
@@ -222,7 +220,7 @@ const SongList = () => {
               {isOnline ? "Manage your repertoire." : "Offline Mode: Read Only"}
             </p>
           </div>
-          {/* Desktop Button */}
+          {canManageSongs && (
           <Button 
             asChild 
             disabled={!isOnline}
@@ -232,6 +230,7 @@ const SongList = () => {
               <Plus className="mr-2 h-5 w-5" /> Add Song
             </Link>
           </Button>
+          )}
         </div>
 
         {/* Search & Filter Bar */}
@@ -291,13 +290,14 @@ const SongList = () => {
                   song={song} 
                   onDeleteRequest={handleDeleteRequest} 
                   isOnline={isOnline}
+                  canManage={canManageSongs}
                 />
               ))
             )}
           </div>
         )}
 
-        {/* Mobile FAB */}
+        {canManageSongs && (
         <Button
             asChild
             size="icon"
@@ -308,6 +308,7 @@ const SongList = () => {
                 <Plus className="h-8 w-8" />
             </Link>
         </Button>
+        )}
 
         {/* Safe Delete Dialog */}
         <AlertDialog open={!!songToDelete} onOpenChange={(open) => !open && setSongToDelete(null)}>

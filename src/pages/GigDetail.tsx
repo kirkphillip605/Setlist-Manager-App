@@ -12,7 +12,6 @@ import { useParams, useNavigate, Link } from "react-router-dom";
 import { Loader2, MapPin, Calendar, Edit, ListMusic, ChevronLeft, Navigation, CloudOff, Clock, Trash2, AlertTriangle, Play } from "lucide-react";
 import { useState, useMemo } from "react";
 import { toast } from "sonner";
-import { useAuth } from "@/context/AuthContext";
 import { useBand } from "@/context/BandContext";
 import { Gig } from "@/types";
 import { useSyncedGigs, useSyncedSetlists } from "@/hooks/useSyncedData";
@@ -28,8 +27,7 @@ import { PerformanceSessionDialog } from "@/components/PerformanceSessionDialog"
 const GigDetail = () => {
     const { id } = useParams();
     const navigate = useNavigate();
-    const { canManageGigs } = useAuth();
-    const { activeBandId } = useBand();
+    const { activeBandId, isManager: canManageGigs } = useBand();
     const queryClient = useQueryClient();
     const isOnline = useNetworkStatus();
     
