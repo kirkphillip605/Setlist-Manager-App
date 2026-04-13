@@ -91,7 +91,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     setUser(data?.user ?? null);
   }, []);
 
-  const isAdmin      = profile?.platform_role === 'platform_admin';
+  const isAdmin      = profile?.platformRole === 'platform_admin';
   const isManager    = isAdmin;
 
   const canManageGigs = isAdmin;

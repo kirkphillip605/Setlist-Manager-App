@@ -107,6 +107,32 @@ app.post('/join', requireAuth,
   }
 );
 
+// --- GET /api/bands/pending-requests — list user's pending join requests
+app.get('/pending-requests', requireAuth, async (c) => {
+  const userId = c.get('userId');
+
+  const requests = await db
+    .select({
+      id:         bandMemberships.id,
+      bandId:     bandMemberships.bandId,
+      bandName:   bands.name,
+      isApproved: bandMemberships.isApproved,
+      createdAt:  bandMemberships.createdAt,
+    })
+    .from(bandMemberships)
+    .innerJoin(bands, eq(bandMemberships.bandId, bands.id))
+    .where(
+      and(
+        eq(bandMemberships.userId, userId),
+        eq(bandMemberships.isApproved, false),
+        isNull(bandMemberships.deletedAt),
+        isNull(bands.deletedAt)
+      )
+    );
+
+  return c.json(requests);
+});
+
 // ── Band-scoped routes (require membership) ──────────────────────────
 
 // --- GET /api/bands/:bandId
@@ -155,11 +181,11 @@ app.get('/:bandId/members/pending', requireAuth, requireBandMember, requireBandM
     ));
 
   return c.json(pending.map(r => ({
-    id:         r.id,
-    userId:     r.userId,
-    email:      r.email,
-    first_name: r.firstName,
-    last_name:  r.lastName,
+    id:        r.id,
+    userId:    r.userId,
+    email:     r.email,
+    firstName: r.firstName,
+    lastName:  r.lastName,
   })));
 });
 
@@ -217,7 +243,7 @@ app.get('/:bandId/members', requireAuth, requireBandMember, async (c) => {
 // --- PATCH /api/bands/:bandId/members/:userId — update a member
 app.patch('/:bandId/members/:userId', requireAuth, requireBandMember, requireBandManager,
   zValidator('json', z.object({
-    role: z.enum(['owner', 'manager', 'member']).optional(),
+    role: z.enum(['manager', 'member']).optional(),
     position: z.string().max(100).nullable().optional(),
     is_approved: z.boolean().optional(),
   })),
@@ -225,6 +251,14 @@ app.patch('/:bandId/members/:userId', requireAuth, requireBandMember, requireBan
     const bandId = c.get('bandId');
     const targetUserId = c.req.param('userId');
     const body = c.req.valid('json');
+
+    const [target] = await db.select().from(bandMemberships)
+      .where(and(eq(bandMemberships.bandId, bandId), eq(bandMemberships.userId, targetUserId)))
+      .limit(1);
+
+    if (target?.role === 'owner') {
+      return c.json({ error: 'Cannot modify the band owner' }, 403);
+    }
 
     const updates: Record<string, unknown> = { updatedAt: new Date() };
     if (body.role !== undefined) updates.role = body.role;
@@ -273,6 +307,14 @@ app.post('/:bandId/bans', requireAuth, requireBandMember, requireBandManager,
     const actorId = c.get('userId');
     const { userId: targetUserId, reason } = c.req.valid('json');
 
+    const [target] = await db.select().from(bandMemberships)
+      .where(and(eq(bandMemberships.bandId, bandId), eq(bandMemberships.userId, targetUserId)))
+      .limit(1);
+
+    if (target?.role === 'owner') {
+      return c.json({ error: 'Cannot ban the band owner' }, 403);
+    }
+
     // Remove membership first
     await db.update(bandMemberships)
       .set({ deletedAt: new Date() })
@@ -297,8 +339,8 @@ app.delete('/:bandId/bans/:userId', requireAuth, requireBandMember, requireBandM
   return c.json({ success: true });
 });
 
-// --- POST /api/bands/:bandId/regenerate-code — regenerate join code (owner only)
-app.post('/:bandId/regenerate-code', requireAuth, requireBandMember, requireBandOwner, async (c) => {
+// --- POST /api/bands/:bandId/regenerate-code — regenerate join code (manager+)
+app.post('/:bandId/regenerate-code', requireAuth, requireBandMember, requireBandManager, async (c) => {
   const bandId = c.get('bandId');
 
   // Set joinCode to empty so the trigger regenerates it
@@ -308,6 +350,139 @@ app.post('/:bandId/regenerate-code', requireAuth, requireBandMember, requireBand
     .returning();
 
   return c.json(band);
+});
+
+// --- GET /api/bands/:bandId/bans — list banned users
+app.get('/:bandId/bans', requireAuth, requireBandMember, requireBandManager, async (c) => {
+  const bandId = c.get('bandId');
+
+  const banned = await db
+    .select({
+      ban: bandBans,
+      user: {
+        id: users.id,
+        firstName: users.firstName,
+        lastName: users.lastName,
+        email: users.email,
+      },
+    })
+    .from(bandBans)
+    .innerJoin(users, eq(bandBans.userId, users.id))
+    .where(eq(bandBans.bandId, bandId));
+
+  return c.json(banned.map(r => ({
+    ...r.ban,
+    user: r.user,
+  })));
+});
+
+// --- POST /api/bands/:bandId/transfer-ownership — transfer band ownership
+app.post('/:bandId/transfer-ownership', requireAuth, requireBandMember, requireBandOwner,
+  zValidator('json', z.object({
+    targetUserId: z.string(),
+    leaveAfterTransfer: z.boolean().default(false),
+  })),
+  async (c) => {
+    const bandId = c.get('bandId');
+    const currentOwnerId = c.get('userId');
+    const { targetUserId, leaveAfterTransfer } = c.req.valid('json');
+
+    if (currentOwnerId === targetUserId) {
+      return c.json({ error: 'Cannot transfer ownership to yourself' }, 400);
+    }
+
+    const [targetMembership] = await db.select().from(bandMemberships)
+      .where(and(
+        eq(bandMemberships.bandId, bandId),
+        eq(bandMemberships.userId, targetUserId),
+        isNull(bandMemberships.deletedAt)
+      ))
+      .limit(1);
+
+    if (!targetMembership || !targetMembership.isApproved) {
+      return c.json({ error: 'Target user is not an active member' }, 400);
+    }
+
+    await db.transaction(async (tx) => {
+      await tx.update(bandMemberships)
+        .set({ role: 'owner', updatedAt: new Date() })
+        .where(and(eq(bandMemberships.bandId, bandId), eq(bandMemberships.userId, targetUserId)));
+
+      if (leaveAfterTransfer) {
+        await tx.update(bandMemberships)
+          .set({ deletedAt: new Date(), updatedAt: new Date() })
+          .where(and(eq(bandMemberships.bandId, bandId), eq(bandMemberships.userId, currentOwnerId)));
+      } else {
+        await tx.update(bandMemberships)
+          .set({ role: 'member', updatedAt: new Date() })
+          .where(and(eq(bandMemberships.bandId, bandId), eq(bandMemberships.userId, currentOwnerId)));
+      }
+    });
+
+    return c.json({ success: true });
+  }
+);
+
+// --- POST /api/bands/:bandId/delete — soft-delete band (owner only, requires OTP)
+app.post('/:bandId/delete', requireAuth, requireBandMember, requireBandOwner,
+  zValidator('json', z.object({
+    otp: z.string().min(1),
+  })),
+  async (c) => {
+    const bandId = c.get('bandId');
+    const ownerId = c.get('userId');
+    const { otp } = c.req.valid('json');
+
+    const [owner] = await db.select().from(users)
+      .where(eq(users.id, ownerId))
+      .limit(1);
+
+    if (!owner?.email) {
+      return c.json({ error: 'No email associated with your account' }, 400);
+    }
+
+    const { auth } = await import('../auth.js');
+    const ctx = { headers: c.req.raw.headers };
+    let otpValid = false;
+    try {
+      const result = await auth.api.verifyEmailOTP({ body: { email: owner.email, otp }, headers: ctx.headers });
+      otpValid = !!result;
+    } catch {
+      otpValid = false;
+    }
+
+    if (!otpValid) {
+      return c.json({ error: 'Invalid or expired verification code' }, 400);
+    }
+
+    await db.update(bands)
+      .set({ deletedAt: new Date(), deletedBy: ownerId, updatedAt: new Date() })
+      .where(eq(bands.id, bandId));
+
+    await db.update(bandMemberships)
+      .set({ deletedAt: new Date(), updatedAt: new Date() })
+      .where(and(eq(bandMemberships.bandId, bandId), isNull(bandMemberships.deletedAt)));
+
+    return c.json({ success: true });
+  }
+);
+
+// --- POST /api/bands/:bandId/request-delete-otp — send OTP for band deletion
+app.post('/:bandId/request-delete-otp', requireAuth, requireBandMember, requireBandOwner, async (c) => {
+  const ownerId = c.get('userId');
+
+  const [owner] = await db.select().from(users)
+    .where(eq(users.id, ownerId))
+    .limit(1);
+
+  if (!owner?.email) {
+    return c.json({ error: 'No email associated with your account' }, 400);
+  }
+
+  const { auth } = await import('../auth.js');
+  await auth.api.sendVerificationOTP({ body: { email: owner.email, type: 'email-verification' } });
+
+  return c.json({ success: true, email: owner.email });
 });
 
 export default app;

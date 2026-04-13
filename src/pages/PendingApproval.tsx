@@ -19,7 +19,7 @@ const PendingApproval = () => {
   // In the new multi-tenant system, "approval" is band-level, not platform-level.
   // This page redirects home immediately since there's no global approval gate.
   useEffect(() => {
-    if (profile?.is_active) navigate('/');
+    if (profile?.isActive) navigate('/');
   }, [profile, navigate]);
 
   return (

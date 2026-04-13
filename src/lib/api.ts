@@ -159,13 +159,15 @@ export const fetchDeltas = async (bandId: string, table: string, lastVersion: nu
 // ── Band management ───────────────────────────────────────────────
 
 export const createBand = (name: string, description?: string) =>
-  apiPost<{ id: string; name: string; join_code: string }>('/api/bands', { name, description });
+  apiPost<{ id: string; name: string; joinCode: string }>('/api/bands', { name, description });
 
-export const joinBand = (joinCode: string) =>
-  apiPost<{ bandId: string }>('/api/bands/join', { joinCode });
+export const joinBand = async (joinCode: string) => {
+  const result = await apiPost<{ band: { id: string }; membership: { id: string } }>('/api/bands/join', { joinCode });
+  return { bandId: result.band.id, membership: result.membership };
+};
 
 export const getBand = (bandId: string) =>
-  apiGet<{ id: string; name: string; description: string | null; join_code: string }>(`/api/bands/${bandId}`);
+  apiGet<{ id: string; name: string; description: string | null; joinCode: string }>(`/api/bands/${bandId}`);
 
 export const updateBand = (bandId: string, updates: { name?: string; description?: string }) =>
   apiPatch<void>(`/api/bands/${bandId}`, updates);
@@ -173,8 +175,16 @@ export const updateBand = (bandId: string, updates: { name?: string; description
 export const getBandMembers = (bandId: string) =>
   apiGet<import('@/types').BandMembership[]>(`/api/bands/${bandId}/members`);
 
+export interface PendingMember {
+  id: string;
+  userId: string;
+  email: string | null;
+  firstName: string | null;
+  lastName: string | null;
+}
+
 export const getPendingMembers = (bandId: string) =>
-  apiGet<import('@/types').BandMembership[]>(`/api/bands/${bandId}/members/pending`);
+  apiGet<PendingMember[]>(`/api/bands/${bandId}/members/pending`);
 
 export const approveMember = (bandId: string, membershipId: string) =>
   apiPost<void>(`/api/bands/${bandId}/members/${membershipId}/approve`);
@@ -193,3 +203,21 @@ export const regenerateJoinCode = (bandId: string) =>
 
 export const leaveBand = (bandId: string, userId: string) =>
   apiDel(`/api/bands/${bandId}/members/${userId}`);
+
+export const getBannedUsers = (bandId: string) =>
+  apiGet<import('@/types').BandBan[]>(`/api/bands/${bandId}/bans`);
+
+export const banUser = (bandId: string, userId: string, reason?: string) =>
+  apiPost(`/api/bands/${bandId}/bans`, { userId, reason });
+
+export const unbanUser = (bandId: string, userId: string) =>
+  apiDel(`/api/bands/${bandId}/bans/${userId}`);
+
+export const transferOwnership = (bandId: string, targetUserId: string, leaveAfterTransfer: boolean) =>
+  apiPost(`/api/bands/${bandId}/transfer-ownership`, { targetUserId, leaveAfterTransfer });
+
+export const requestDeleteOtp = (bandId: string) =>
+  apiPost<{ success: boolean; email: string }>(`/api/bands/${bandId}/request-delete-otp`);
+
+export const deleteBand = (bandId: string, otp: string) =>
+  apiPost(`/api/bands/${bandId}/delete`, { otp });

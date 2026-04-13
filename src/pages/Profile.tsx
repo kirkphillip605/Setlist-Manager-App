@@ -44,8 +44,8 @@ const Profile = () => {
 
   useEffect(() => {
     if (ctxProfile) {
-      setFirstName(ctxProfile.first_name ?? '');
-      setLastName(ctxProfile.last_name  ?? '');
+      setFirstName(ctxProfile.firstName ?? '');
+      setLastName(ctxProfile.lastName  ?? '');
     }
   }, [ctxProfile]);
 

@@ -15,11 +15,11 @@ export interface Band {
   id: string;
   name: string;
   description?: string | null;
-  join_code: string;
-  created_by: string;
-  created_at: string;
-  updated_at: string;
-  deleted_at?: string | null;
+  joinCode: string;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt?: string | null;
 }
 
 // ---------------------------------------------------------------
@@ -27,18 +27,17 @@ export interface Band {
 // ---------------------------------------------------------------
 export interface BandMembership {
   id: string;
-  band_id: string;
-  user_id: string;
+  bandId: string;
+  userId: string;
   role: BandRole;
   position: string | null;
-  is_approved: boolean;
-  invited_by: string | null;
-  joined_at: string | null;
-  created_at: string;
-  updated_at: string;
-  deleted_at?: string | null;
-  // Hydrated fields
-  user?: Pick<Profile, 'id' | 'first_name' | 'last_name' | 'email' | 'avatar_url'>;
+  isApproved: boolean;
+  invitedBy: string | null;
+  joinedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt?: string | null;
+  user?: Pick<Profile, 'id' | 'firstName' | 'lastName' | 'email' | 'avatarUrl'>;
 }
 
 // ---------------------------------------------------------------
@@ -46,11 +45,17 @@ export interface BandMembership {
 // ---------------------------------------------------------------
 export interface BandBan {
   id: string;
-  band_id: string;
-  user_id: string;
-  banned_by: string;
+  bandId: string;
+  userId: string;
+  bannedBy: string;
   reason: string | null;
-  banned_at: string;
+  bannedAt: string;
+  user?: {
+    id: string;
+    firstName: string | null;
+    lastName: string | null;
+    email: string;
+  };
 }
 
 // ---------------------------------------------------------------
@@ -213,14 +218,14 @@ export interface UserPreferences {
 export interface Profile {
   id: string;
   email?: string | null;
-  first_name: string | null;
-  last_name: string | null;
-  avatar_url?: string;
-  platform_role: PlatformRole;
-  is_active: boolean;
-  is_profile_complete?: boolean;
+  firstName: string | null;
+  lastName: string | null;
+  avatarUrl?: string;
+  platformRole: PlatformRole;
+  isActive: boolean;
+  isProfileComplete?: boolean;
   preferences?: UserPreferences;
-  deleted_at?: string | null;
+  deletedAt?: string | null;
 }
 
 // ---------------------------------------------------------------

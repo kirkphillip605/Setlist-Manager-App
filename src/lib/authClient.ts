@@ -112,16 +112,16 @@ export const setInitialPassword = (opts: {
 export const mapAuthUserToProfile = (user: AuthUser): Profile => {
   const u = user as UserWithFields;
   return {
-    id:                  u.id,
-    email:               u.email,
-    first_name:          u.firstName ?? null,
-    last_name:           u.lastName ?? null,
-    avatar_url:          u.image ?? undefined,
-    platform_role:       (u.platformRole ?? 'user') as Profile['platform_role'],
-    is_active:           u.isActive ?? true,
-    is_profile_complete: u.isProfileComplete ?? false,
-    preferences:         typeof u.preferences === 'string'
-                           ? JSON.parse(u.preferences)
-                           : (u.preferences as Profile['preferences']),
+    id:                u.id,
+    email:             u.email,
+    firstName:         u.firstName ?? null,
+    lastName:          u.lastName ?? null,
+    avatarUrl:         u.image ?? undefined,
+    platformRole:      (u.platformRole ?? 'user') as Profile['platformRole'],
+    isActive:          u.isActive ?? true,
+    isProfileComplete: u.isProfileComplete ?? false,
+    preferences:       typeof u.preferences === 'string'
+                         ? JSON.parse(u.preferences)
+                         : (u.preferences as Profile['preferences']),
   };
 };

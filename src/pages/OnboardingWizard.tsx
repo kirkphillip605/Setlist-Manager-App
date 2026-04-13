@@ -32,7 +32,7 @@ const OnboardingWizard = () => {
   const [providerInfo, setProviderInfo] = useState<AuthProviderInfo | null>(null);
   const initializedRef = useRef(false);
 
-  const profileCompleteOnMount = useRef(profile?.is_profile_complete ?? false);
+  const profileCompleteOnMount = useRef(profile?.isProfileComplete ?? false);
 
   useEffect(() => {
     if (profileCompleteOnMount.current) {
@@ -44,9 +44,9 @@ const OnboardingWizard = () => {
 
   useEffect(() => {
     if (initializedRef.current) return;
-    if (profile?.first_name) setFirstName(profile.first_name);
-    if (profile?.last_name)  setLastName(profile.last_name);
-    if (profile?.first_name || profile?.last_name) { initializedRef.current = true; return; }
+    if (profile?.firstName) setFirstName(profile.firstName);
+    if (profile?.lastName)  setLastName(profile.lastName);
+    if (profile?.firstName || profile?.lastName) { initializedRef.current = true; return; }
 
     if (user?.name && !initializedRef.current) {
       const parts = user.name.split(' ');

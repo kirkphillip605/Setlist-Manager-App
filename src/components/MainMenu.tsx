@@ -170,10 +170,16 @@ export const MainMenu = ({ open: controlledOpen, onOpenChange: setControlledOpen
                         Manage Band
                     </Button>
                   )}
-                  <Button variant="ghost" className="w-full justify-start gap-3" onClick={() => handleNav('/bands/setup')}>
+                  <Button variant="ghost" className="w-full justify-start gap-3" onClick={() => handleNav(bands.length === 0 ? '/bands/setup' : '/bands/join')}>
                       <Music2 className="h-4 w-4" />
                       {bands.length === 0 ? 'Create or Join Band' : 'Join Another Band'}
                   </Button>
+                  {bands.length > 0 && (
+                    <Button variant="ghost" className="w-full justify-start gap-3" onClick={() => handleNav('/bands/setup')}>
+                        <Music2 className="h-4 w-4" />
+                        Create New Band
+                    </Button>
+                  )}
               </div>
           </div>
 

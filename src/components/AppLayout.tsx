@@ -19,6 +19,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useBand } from "@/context/BandContext";
 import { PendingApprovalNotifier } from "./PendingApprovalNotifier";
 import { MainMenu } from "./MainMenu";
+import { BandSwitcher } from "./BandSwitcher";
 import { useImmersiveMode } from "@/context/ImmersiveModeContext";
 import { ActiveSessionBanner } from "./ActiveSessionBanner";
 
@@ -143,17 +144,15 @@ const AppLayout = ({ children }: AppLayoutProps) => {
         </div>
 
         <div className={cn("flex flex-col mb-2 pt-6 transition-all shrink-0", isSidebarCollapsed ? "items-center px-0" : "px-4")}>
-          <div className={cn("flex items-center gap-3 mb-4 transition-all h-10", isSidebarCollapsed ? "justify-center" : "justify-start")}>
+          <div className={cn("flex items-center gap-3 mb-2 transition-all h-10", isSidebarCollapsed ? "justify-center" : "justify-start")}>
              <img src={iconPath} alt="Icon" className="w-8 h-8 shrink-0 drop-shadow-md" />
              {!isSidebarCollapsed && (
                <div className="min-w-0">
                  <span className="font-bold text-sm tracking-tight truncate block">Setlist Manager Pro</span>
-                 {activeBand && (
-                   <span className="text-xs text-muted-foreground truncate block">{activeBand.name}</span>
-                 )}
                </div>
              )}
           </div>
+          <BandSwitcher variant="sidebar" collapsed={isSidebarCollapsed} />
         </div>
         
         <nav className="space-y-2 flex-1 px-3 overflow-hidden">
@@ -209,10 +208,8 @@ const AppLayout = ({ children }: AppLayoutProps) => {
             <img src={iconPath} alt="Icon" className="w-6 h-6 drop-shadow-sm shrink-0" />
             <div className="min-w-0">
               <span className="font-bold text-sm block leading-tight">Setlist Manager Pro</span>
-              {activeBand && (
-                <span className="text-xs text-muted-foreground truncate block leading-tight">{activeBand.name}</span>
-              )}
             </div>
+            <BandSwitcher variant="header" />
          </div>
          <MainMenu />
       </header>

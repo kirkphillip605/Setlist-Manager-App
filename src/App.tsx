@@ -33,6 +33,7 @@ import PendingApproval    from './pages/PendingApproval';
 import ReactivateAccount  from './pages/ReactivateAccount';
 import BandSetup          from './pages/BandSetup';
 import BandManage         from './pages/BandManage';
+import JoinBand           from './pages/JoinBand';
 
 import { queryClient, persister } from '@/lib/queryClient';
 import { SyncIndicator } from '@/components/SyncIndicator';
@@ -66,12 +67,12 @@ const ProtectedRoute = ({ children, requireBand = true }: { children: JSX.Elemen
   }
 
   // Inactive account (soft-deleted)
-  if (profile && !profile.is_active) {
+  if (profile && !profile.isActive) {
     if (location.pathname !== '/reactivate') return <Navigate to="/reactivate" replace />;
     return children;
   }
 
-  if (!profile?.is_profile_complete) {
+  if (!profile?.isProfileComplete) {
     if (location.pathname !== '/onboarding') return <Navigate to="/onboarding" replace />;
     return children;
   }
@@ -83,8 +84,7 @@ const ProtectedRoute = ({ children, requireBand = true }: { children: JSX.Elemen
   }
 
   // Redirect away from special pages once conditions are met
-  if (location.pathname === '/reactivate' && profile?.is_active) return <Navigate to="/" replace />;
-  if (location.pathname === '/bands/setup' && !noBands)           return <Navigate to="/" replace />;
+  if (location.pathname === '/reactivate' && profile?.isActive) return <Navigate to="/" replace />;
 
   return <DataHydration>{children}</DataHydration>;
 };
@@ -139,6 +139,7 @@ const AppContent = () => {
         <Route path="/reactivate"       element={<ProtectedRoute requireBand={false}><ReactivateAccount /></ProtectedRoute>} />
         <Route path="/bands/setup"      element={<ProtectedRoute requireBand={false}><BandSetup /></ProtectedRoute>} />
         <Route path="/bands/manage"     element={<ProtectedRoute><BandManage /></ProtectedRoute>} />
+        <Route path="/bands/join"      element={<ProtectedRoute requireBand={false}><JoinBand /></ProtectedRoute>} />
 
         <Route path="/"                 element={<ProtectedRoute><Index /></ProtectedRoute>} />
         <Route path="/songs"            element={<ProtectedRoute><SongList /></ProtectedRoute>} />

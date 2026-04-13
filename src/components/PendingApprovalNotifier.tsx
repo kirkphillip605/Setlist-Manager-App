@@ -13,8 +13,8 @@ interface PendingMember {
   id: string;
   userId: string;
   email: string;
-  first_name: string;
-  last_name: string;
+  firstName: string;
+  lastName: string;
 }
 
 export const PendingApprovalNotifier = () => {
@@ -99,7 +99,7 @@ export const PendingApprovalNotifier = () => {
             {pendingList.map(m => (
               <div key={m.id} className="flex items-center justify-between p-3 border rounded-lg bg-muted/20">
                 <div className="min-w-0 flex-1 mr-2">
-                  <p className="font-medium truncate">{m.first_name} {m.last_name}</p>
+                  <p className="font-medium truncate">{m.firstName} {m.lastName}</p>
                   <p className="text-xs text-muted-foreground truncate">{m.email}</p>
                 </div>
                 <div className="flex gap-2 shrink-0">
