@@ -29,6 +29,7 @@ interface AdditionalUserFields {
   isActive?: boolean;
   isProfileComplete?: boolean;
   preferences?: string | Record<string, unknown>;
+  twoFactorEnabled?: boolean;
 }
 
 export const authClient = createAuthClient({
@@ -53,21 +54,59 @@ interface AuthApiResult<T = Record<string, unknown>> {
   error?: { message: string; status?: number } | null;
 }
 
+function getBackoffDelay(attempt: number): number {
+  const base = Math.min(1000 * Math.pow(2, attempt), 30000);
+  const jitter = base * 0.5 * Math.random();
+  return base + jitter;
+}
+
+async function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+const MAX_RETRIES_429 = 3;
+
 async function authFetch<T = Record<string, unknown>>(
   path: string,
   body?: Record<string, unknown>
 ): Promise<AuthApiResult<T>> {
-  const res = await fetch(`${AUTH_BASE}${path}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  const json = await res.json();
-  if (!res.ok) {
-    return { error: { message: json?.message ?? json?.error ?? 'Request failed', status: res.status } };
+  for (let attempt = 0; attempt <= MAX_RETRIES_429; attempt++) {
+    const res = await fetch(`${AUTH_BASE}${path}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: body ? JSON.stringify(body) : undefined,
+    });
+
+    if (res.status === 429) {
+      if (attempt < MAX_RETRIES_429) {
+        const retryAfter = res.headers.get('Retry-After');
+        let delayMs = getBackoffDelay(attempt);
+        if (retryAfter) {
+          const parsed = Number(retryAfter);
+          if (!isNaN(parsed) && parsed > 0) {
+            delayMs = parsed * 1000;
+          } else {
+            const date = Date.parse(retryAfter);
+            if (!isNaN(date)) {
+              delayMs = Math.max(date - Date.now(), 1000);
+            }
+          }
+        }
+        await sleep(delayMs);
+        continue;
+      }
+      return { error: { message: 'Too many requests. Please wait a moment and try again.', status: 429 } };
+    }
+
+    const json = await res.json();
+    if (!res.ok) {
+      return { error: { message: json?.message ?? json?.error ?? 'Request failed', status: res.status } };
+    }
+    return { data: json as T };
   }
-  return { data: json as T };
+
+  return { error: { message: 'Too many requests. Please wait a moment and try again.', status: 429 } };
 }
 
 interface TwoFactorEnableData {
@@ -76,8 +115,10 @@ interface TwoFactorEnableData {
 }
 
 export const twoFactor = {
-  enable: (opts: { password?: string }) =>
+  enable: (opts: { password: string }) =>
     authFetch<TwoFactorEnableData>('/two-factor/enable', opts),
+  disable: (opts: { password: string }) =>
+    authFetch('/two-factor/disable', opts),
   verifyTotp: (opts: { code: string }) =>
     authFetch('/two-factor/verify-totp', opts),
   verifyBackupCode: (opts: { code: string }) =>
@@ -86,6 +127,10 @@ export const twoFactor = {
     authFetch('/two-factor/send-otp'),
   verifyOtp: (opts: { code: string }) =>
     authFetch('/two-factor/verify-otp', opts),
+  getBackupCodes: (opts: { password: string }) =>
+    authFetch<{ backupCodes: string[] }>('/two-factor/get-backup-codes', opts),
+  regenerateBackupCodes: (opts: { password: string }) =>
+    authFetch<{ backupCodes: string[] }>('/two-factor/generate-backup-codes', opts),
 };
 
 export const updateUserProfile = (fields: {
@@ -103,11 +148,18 @@ export const changeUserPassword = (opts: {
 
 export const resetUserPassword = (opts: {
   newPassword: string;
-}) => authFetch('/update-password', opts);
+  token: string;
+}) => authFetch('/reset-password', { newPassword: opts.newPassword, token: opts.token });
 
 export const setInitialPassword = (opts: {
   newPassword: string;
 }) => authFetch('/set-password', opts);
+
+export const listUserAccounts = () =>
+  authFetch<{ accounts: Array<{ id: string; providerId: string; accountId: string }> }>('/list-accounts');
+
+export const unlinkAccount = (opts: { providerId: string }) =>
+  authFetch('/unlink-account', opts);
 
 export const mapAuthUserToProfile = (user: AuthUser): Profile => {
   const u = user as UserWithFields;

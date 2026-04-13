@@ -2,11 +2,12 @@ import { Toaster } from '@/components/ui/toaster';
 import { Toaster as Sonner } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { MetronomeProvider } from '@/components/MetronomeContext';
 import { Loader2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { App as CapacitorApp } from '@capacitor/app';
+import { Capacitor } from '@capacitor/core';
 
 import Index              from './pages/Index';
 import Login              from './pages/Login';
@@ -48,25 +49,25 @@ import { MobileAppSuggestion } from '@/components/MobileAppSuggestion';
 import { storageAdapter } from '@/lib/storageAdapter';
 import { MetronomeRouteHandler } from '@/components/MetronomeRouteHandler';
 
-// ── Protected Route ───────────────────────────────────────────────
+const BrandedLoadingScreen = () => (
+  <div className="min-h-screen flex items-center justify-center bg-background">
+    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+  </div>
+);
+
 const ProtectedRoute = ({ children, requireBand = true }: { children: JSX.Element; requireBand?: boolean }) => {
   const { user, loading, profile } = useAuth();
   const { noBands, bandsLoading } = useBand();
   const location = useLocation();
 
   if (loading || bandsLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
+    return <BrandedLoadingScreen />;
   }
 
   if (!user) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  // Inactive account (soft-deleted)
   if (profile && !profile.isActive) {
     if (location.pathname !== '/reactivate') return <Navigate to="/reactivate" replace />;
     return children;
@@ -77,24 +78,21 @@ const ProtectedRoute = ({ children, requireBand = true }: { children: JSX.Elemen
     return children;
   }
 
-  // No bands yet → direct to band setup
   if (requireBand && noBands) {
     if (location.pathname !== '/bands/setup') return <Navigate to="/bands/setup" replace />;
     return children;
   }
 
-  // Redirect away from special pages once conditions are met
   if (location.pathname === '/reactivate' && profile?.isActive) return <Navigate to="/" replace />;
 
   return <DataHydration>{children}</DataHydration>;
 };
 
-// ── Public-Only Route ─────────────────────────────────────────────
 const PublicOnlyRoute = ({ children }: { children: JSX.Element }) => {
   const { user, loading } = useAuth();
   const location = useLocation();
 
-  if (loading) return null;
+  if (loading) return <BrandedLoadingScreen />;
   if (user) {
     const from = (location.state as { from?: { pathname?: string } } | null)?.from?.pathname || '/';
     return <Navigate to={from} replace />;
@@ -102,25 +100,43 @@ const PublicOnlyRoute = ({ children }: { children: JSX.Element }) => {
   return children;
 };
 
-// ── App Content ───────────────────────────────────────────────────
+const TwoFactorGuard = () => {
+  const location = useLocation();
+  const challengeId = sessionStorage.getItem('2fa_challenge_id');
+
+  if (!challengeId) {
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  return <TwoFactorChallenge />;
+};
+
 const AppContent = () => {
+  const navigate = useNavigate();
+
   useEffect(() => {
     CapacitorApp.addListener('appUrlOpen', async (event) => {
-      // BetterAuth OAuth callback: redirect the WebView to the callback URL
-      if (event.url.includes('auth/callback') || event.url.includes('google-auth')) {
-        try {
-          const url = new URL(event.url);
-          // Navigate the web view to the callback path so BetterAuth can process it
-          if (url.pathname.startsWith('/auth/callback')) {
-            window.location.href = event.url;
+      try {
+        const url = event.url;
+
+        if (url.includes('auth/callback') || url.includes('google-auth')) {
+          if (Capacitor.isNativePlatform()) {
+            const urlObj = new URL(url.replace(/^com\.kirknetllc\.setlistpro:\/\//, 'https://placeholder/'));
+            const path = urlObj.pathname + urlObj.search + urlObj.hash;
+            navigate(path.startsWith('/') ? path : `/${path}`, { replace: true });
+          } else {
+            const urlObj = new URL(url);
+            if (urlObj.pathname.startsWith('/auth/callback')) {
+              window.location.href = url;
+            }
           }
-        } catch (e) {
-          console.error('[Auth] Failed to parse deep link URL:', e);
         }
+      } catch (e) {
+        console.error('[Auth] Failed to parse deep link URL:', e);
       }
     });
     return () => { CapacitorApp.removeAllListeners(); };
-  }, []);
+  }, [navigate]);
 
   return (
     <>
@@ -134,7 +150,7 @@ const AppContent = () => {
 
         <Route path="/onboarding"       element={<ProtectedRoute requireBand={false}><OnboardingWizard /></ProtectedRoute>} />
         <Route path="/2fa-setup"        element={<ProtectedRoute requireBand={false}><TwoFactorSetup /></ProtectedRoute>} />
-        <Route path="/2fa-challenge"    element={<TwoFactorChallenge />} />
+        <Route path="/2fa-challenge"    element={<TwoFactorGuard />} />
         <Route path="/pending"          element={<ProtectedRoute requireBand={false}><PendingApproval /></ProtectedRoute>} />
         <Route path="/reactivate"       element={<ProtectedRoute requireBand={false}><ReactivateAccount /></ProtectedRoute>} />
         <Route path="/bands/setup"      element={<ProtectedRoute requireBand={false}><BandSetup /></ProtectedRoute>} />
@@ -164,7 +180,6 @@ const AppContent = () => {
   );
 };
 
-// ── App Status Wrapper ────────────────────────────────────────────
 const AppStatusWrapper = () => {
   const { isMaintenance, isUpdateRequired, statusData, loading } = useAppStatus();
   const [showSuggestion, setShowSuggestion] = useState(false);
@@ -180,7 +195,7 @@ const AppStatusWrapper = () => {
     void storageAdapter.setItem('dismissed_mobile_app_suggestion', 'true');
   };
 
-  if (loading) return null;
+  if (loading) return <BrandedLoadingScreen />;
   if (isUpdateRequired) return <SystemStatusScreen status={statusData} mode="update" />;
   if (isMaintenance)    return <SystemStatusScreen status={statusData} mode="maintenance" />;
 
@@ -192,7 +207,6 @@ const AppStatusWrapper = () => {
   );
 };
 
-// ── Root App ──────────────────────────────────────────────────────
 const App = () => (
   <PersistQueryClientProvider
     client={queryClient}

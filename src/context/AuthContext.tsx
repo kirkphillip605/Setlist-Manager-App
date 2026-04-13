@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useCallback, useEffect, useState } from 'react';
+import React, { createContext, useContext, useCallback, useEffect, useState, useRef } from 'react';
 import { authClient, mapAuthUserToProfile } from '@/lib/authClient';
 import type { AuthUser } from '@/lib/authClient';
 import { useQueryClient } from '@tanstack/react-query';
@@ -8,6 +8,8 @@ import { Preferences } from '@capacitor/preferences';
 import { storageAdapter } from '@/lib/storageAdapter';
 import { useStore } from '@/lib/store';
 import type { Profile, Setlist } from '@/types';
+
+const AUTH_CACHE_KEY = 'cached_auth_user';
 
 interface AuthContextType {
   user:           AuthUser | null;
@@ -31,30 +33,62 @@ const AuthContext = createContext<AuthContextType>({
   checkSession:   async () => {},
 });
 
+let inflightSessionPromise: Promise<AuthUser | null> | null = null;
+
+function deduplicatedGetSession(): Promise<AuthUser | null> {
+  if (inflightSessionPromise) return inflightSessionPromise;
+
+  inflightSessionPromise = authClient.getSession()
+    .then(({ data }) => data?.user ?? null)
+    .catch(() => null)
+    .finally(() => { inflightSessionPromise = null; });
+
+  return inflightSessionPromise;
+}
+
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isPending, setIsPending] = useState(true);
+  const [hasCachedUser, setHasCachedUser] = useState(false);
   const queryClient  = useQueryClient();
   const resetStore   = useStore(state => state.reset);
+  const initializedRef = useRef(false);
 
   useEffect(() => {
-    let mounted = true;
-    authClient.getSession().then(({ data }) => {
-      if (mounted) {
-        setUser(data?.user ?? null);
-        setIsPending(false);
+    if (initializedRef.current) return;
+    initializedRef.current = true;
+
+    storageAdapter.getItem(AUTH_CACHE_KEY).then(cached => {
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached);
+          setUser(parsed);
+          setHasCachedUser(true);
+          setIsPending(false);
+        } catch {}
       }
-    }).catch(() => {
-      if (mounted) setIsPending(false);
+    }).catch(() => {});
+
+    deduplicatedGetSession().then(sessionUser => {
+      setUser(sessionUser);
+      setIsPending(false);
+      setHasCachedUser(false);
+      if (sessionUser) {
+        storageAdapter.setItem(AUTH_CACHE_KEY, JSON.stringify(sessionUser)).catch(() => {});
+      } else {
+        storageAdapter.removeItem(AUTH_CACHE_KEY).catch(() => {});
+      }
     });
-    return () => { mounted = false; };
   }, []);
 
   const profile = user ? mapAuthUserToProfile(user) : null;
 
   const refreshProfile = useCallback(async () => {
-    const { data } = await authClient.getSession();
-    setUser(data?.user ?? null);
+    const sessionUser = await deduplicatedGetSession();
+    setUser(sessionUser);
+    if (sessionUser) {
+      storageAdapter.setItem(AUTH_CACHE_KEY, JSON.stringify(sessionUser)).catch(() => {});
+    }
   }, []);
 
   const handleSignOut = useCallback(async () => {
@@ -67,6 +101,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     setUser(null);
 
     try {
+      await storageAdapter.removeItem(AUTH_CACHE_KEY);
       queryClient.removeQueries();
       queryClient.clear();
       await storageAdapter.removeItem('REACT_QUERY_OFFLINE_CACHE');
@@ -83,8 +118,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   }, [queryClient, resetStore]);
 
   const checkSession = useCallback(async () => {
-    const { data } = await authClient.getSession();
-    setUser(data?.user ?? null);
+    const sessionUser = await deduplicatedGetSession();
+    setUser(sessionUser);
+    if (sessionUser) {
+      storageAdapter.setItem(AUTH_CACHE_KEY, JSON.stringify(sessionUser)).catch(() => {});
+    } else {
+      storageAdapter.removeItem(AUTH_CACHE_KEY).catch(() => {});
+    }
   }, []);
 
   const isAdmin      = profile?.platformRole === 'platform_admin';

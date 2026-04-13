@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { authClient } from '@/lib/authClient';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
@@ -24,6 +24,7 @@ import {
 import { toast } from 'sonner';
 import { Loader2, Mail, KeyRound, Wand2 } from 'lucide-react';
 import { Capacitor } from '@capacitor/core';
+import { GoogleAuth } from '@codetrix-studio/capacitor-google-auth';
 import { storageAdapter } from '@/lib/storageAdapter';
 import { useTheme } from '@/components/theme-provider';
 import { LoadingDialog } from '@/components/LoadingDialog';
@@ -39,6 +40,8 @@ const Login = () => {
   const { theme }     = useTheme();
 
   useEffect(() => {
+    sessionStorage.removeItem('2fa_pending');
+
     const params = new URLSearchParams(window.location.search);
     const joinCode = params.get('joinCode');
     if (joinCode) {
@@ -59,6 +62,9 @@ const Login = () => {
   const [otpSent, setOtpSent]           = useState(false);
   const [otpValue, setOtpValue]         = useState('');
   const [magicLinkSent, setMagicLinkSent] = useState(false);
+
+  const lastOtpSendTime = useRef<number>(0);
+  const OTP_COOLDOWN_MS = 30000;
 
   useEffect(() => {
     if (theme === 'system') {
@@ -95,6 +101,12 @@ const Login = () => {
     }
   };
 
+  const navigateTo2FA = () => {
+    const challengeId = crypto.randomUUID();
+    sessionStorage.setItem('2fa_challenge_id', challengeId);
+    navigate('/2fa-challenge');
+  };
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -106,14 +118,14 @@ const Login = () => {
       const code = (result.error as { code?: string }).code ?? '';
       const msgLower = msg.toLowerCase();
       if (code === 'TWO_FACTOR_REQUIRED' || msgLower.includes('two factor') || msgLower.includes('2fa') || msgLower.includes('otp')) {
-        navigate('/2fa-challenge');
+        navigateTo2FA();
       } else {
         toast.error(msg || 'Sign in failed');
       }
     } else {
       const data = result.data as Record<string, unknown> | null;
       if (data?.twoFactorRedirect) {
-        navigate('/2fa-challenge');
+        navigateTo2FA();
       } else {
         await checkSession();
         navigate('/');
@@ -142,9 +154,17 @@ const Login = () => {
     setLoading(false);
   };
 
+  const canSendOtp = () => {
+    return Date.now() - lastOtpSendTime.current >= OTP_COOLDOWN_MS;
+  };
+
   const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email.trim()) { toast.error('Please enter your email'); return; }
+    if (!canSendOtp()) {
+      toast.error('Please wait before requesting another code');
+      return;
+    }
     setLoading(true);
     await persistEmail();
 
@@ -154,6 +174,7 @@ const Login = () => {
         type: 'sign-in',
       });
       if (error) throw new Error(error.message ?? 'Failed to send code');
+      lastOtpSendTime.current = Date.now();
       setOtpSent(true);
       toast.success('Verification code sent to your email!');
     } catch (err) {
@@ -175,7 +196,7 @@ const Login = () => {
       if (result.error) throw new Error(result.error.message ?? 'Invalid code');
       const data = result.data as Record<string, unknown> | null;
       if (data?.twoFactorRedirect) {
-        navigate('/2fa-challenge');
+        navigateTo2FA();
       } else {
         await checkSession();
         navigate('/');
@@ -205,13 +226,12 @@ const Login = () => {
         return;
       }
     } catch {
-      // Fall through to sign-up attempt if check fails
     }
 
     const { error } = await authClient.signUp.email({
       email:     email.trim(),
       password,
-      name:      email.trim(),
+      name:      'New User',
     });
 
     if (!error) {
@@ -231,10 +251,36 @@ const Login = () => {
   };
 
   const handleGoogleLogin = async () => {
-    await authClient.signIn.social({
-      provider:    'google',
-      callbackURL: getCallbackUrl(),
-    });
+    if (Capacitor.isNativePlatform()) {
+      setLoading(true);
+      try {
+        await GoogleAuth.initialize({
+          clientId: import.meta.env.VITE_GOOGLE_CLIENT_ID as string,
+          scopes: ['email', 'profile'],
+          grantOfflineAccess: false,
+        });
+        const googleUser = await GoogleAuth.signIn();
+        const idToken = googleUser.authentication.idToken;
+        if (!idToken) throw new Error('No ID token from Google');
+        const { error } = await authClient.signIn.social({
+          provider: 'google',
+          idToken: { token: idToken },
+          callbackURL: getCallbackUrl(),
+        });
+        if (error) throw new Error(error.message ?? 'Google sign-in failed');
+        await checkSession();
+        navigate('/');
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Google sign-in failed');
+      } finally {
+        setLoading(false);
+      }
+    } else {
+      await authClient.signIn.social({
+        provider:    'google',
+        callbackURL: getCallbackUrl(),
+      });
+    }
   };
 
   const handleForgotPassword = async (e: React.FormEvent) => {
@@ -438,14 +484,19 @@ const Login = () => {
               variant="ghost"
               size="sm"
               className="text-xs"
-              disabled={loading}
+              disabled={loading || !canSendOtp()}
               onClick={async () => {
+                if (!canSendOtp()) {
+                  toast.error('Please wait before requesting another code');
+                  return;
+                }
                 setLoading(true);
                 try {
                   await authClient.emailOtp.sendVerificationOtp({
                     email: email.trim(),
                     type: 'sign-in',
                   });
+                  lastOtpSendTime.current = Date.now();
                   toast.success('New code sent!');
                   setOtpValue('');
                 } catch {

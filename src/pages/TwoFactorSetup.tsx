@@ -21,6 +21,7 @@ const TwoFactorSetup = () => {
   const [verifyCode, setVerifyCode] = useState('');
   const [recoveryConfirm, setRecoveryConfirm] = useState('');
   const [qrDataUrl, setQrDataUrl] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const qrGenerated = useRef(false);
 
   useEffect(() => {
@@ -31,10 +32,14 @@ const TwoFactorSetup = () => {
   }, [totpURI]);
 
   const handleEnableTOTP = async () => {
+    if (!confirmPassword.trim()) {
+      toast.error('Please enter your password to enable 2FA');
+      return;
+    }
     setLoading(true);
     try {
       const result = await twoFactor.enable({
-        password: undefined,
+        password: confirmPassword,
       });
       if (result?.error) {
         toast.error(result.error.message ?? 'Failed to enable 2FA');
@@ -102,8 +107,21 @@ const TwoFactorSetup = () => {
               Add an extra layer of security to your account using an authenticator app.
             </CardDescription>
           </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="confirm-pw">Confirm your password</Label>
+              <Input
+                id="confirm-pw"
+                type="password"
+                placeholder="Enter your password"
+                value={confirmPassword}
+                onChange={e => setConfirmPassword(e.target.value)}
+                autoFocus
+              />
+            </div>
+          </CardContent>
           <CardFooter className="flex flex-col gap-2 pt-2">
-            <Button className="w-full" onClick={handleEnableTOTP} disabled={loading}>
+            <Button className="w-full" onClick={handleEnableTOTP} disabled={loading || !confirmPassword.trim()}>
               {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               <Shield className="mr-2 h-4 w-4" />
               Set Up with Authenticator App

@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { updateUserProfile, setInitialPassword } from '@/lib/authClient';
-import { apiGet, apiPatch, apiPost } from '@/lib/apiFetch';
+import { apiGet, apiPost } from '@/lib/apiFetch';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -99,11 +99,6 @@ const OnboardingWizard = () => {
         setLoading(false);
         return;
       }
-
-      await apiPatch('/api/users/me', {
-        first_name: firstName.trim(),
-        last_name: lastName.trim(),
-      });
 
       await refreshProfile();
       advanceAfterName();

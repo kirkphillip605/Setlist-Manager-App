@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { twoFactor } from '@/lib/authClient';
 import { useAuth } from '@/context/AuthContext';
@@ -26,6 +26,27 @@ const TwoFactorChallenge = () => {
   const [emailOtpSent, setEmailOtpSent] = useState(false);
   const [recoveryCode, setRecoveryCode] = useState('');
 
+  const lastEmailOtpSendTime = useRef<number>(0);
+  const EMAIL_OTP_COOLDOWN_MS = 30000;
+
+  const challengeId = sessionStorage.getItem('2fa_challenge_id');
+
+  useEffect(() => {
+    if (!challengeId) {
+      navigate('/login', { replace: true });
+    }
+  }, [challengeId, navigate]);
+
+  if (!challengeId) {
+    return null;
+  }
+
+  const onVerifySuccess = async () => {
+    sessionStorage.removeItem('2fa_challenge_id');
+    await checkSession();
+    navigate('/');
+  };
+
   const handleTOTPVerify = async (e: React.FormEvent) => {
     e.preventDefault();
     if (totpCode.length < 6) {
@@ -42,8 +63,7 @@ const TwoFactorChallenge = () => {
         setLoading(false);
         return;
       }
-      await checkSession();
-      navigate('/');
+      await onVerifySuccess();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Verification failed');
     } finally {
@@ -51,7 +71,15 @@ const TwoFactorChallenge = () => {
     }
   };
 
+  const canSendEmailOtp = () => {
+    return Date.now() - lastEmailOtpSendTime.current >= EMAIL_OTP_COOLDOWN_MS;
+  };
+
   const handleSendEmailOtp = async () => {
+    if (!canSendEmailOtp()) {
+      toast.error('Please wait before requesting another code');
+      return;
+    }
     setLoading(true);
     try {
       const result = await twoFactor.sendOtp();
@@ -60,6 +88,7 @@ const TwoFactorChallenge = () => {
         setLoading(false);
         return;
       }
+      lastEmailOtpSendTime.current = Date.now();
       setEmailOtpSent(true);
       toast.success('Verification code sent to your email');
     } catch (err) {
@@ -85,8 +114,7 @@ const TwoFactorChallenge = () => {
         setLoading(false);
         return;
       }
-      await checkSession();
-      navigate('/');
+      await onVerifySuccess();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Verification failed');
     } finally {
@@ -110,8 +138,7 @@ const TwoFactorChallenge = () => {
         setLoading(false);
         return;
       }
-      await checkSession();
-      navigate('/');
+      await onVerifySuccess();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Verification failed');
     } finally {
@@ -181,7 +208,16 @@ const TwoFactorChallenge = () => {
                   variant="ghost"
                   size="sm"
                   className="w-full"
-                  onClick={() => { setEmailOtpSent(false); setEmailOtpCode(''); }}
+                  disabled={!canSendEmailOtp()}
+                  onClick={() => {
+                    if (!canSendEmailOtp()) {
+                      toast.error('Please wait before requesting another code');
+                      return;
+                    }
+                    setEmailOtpSent(false);
+                    setEmailOtpCode('');
+                    handleSendEmailOtp();
+                  }}
                 >
                   Resend code
                 </Button>
@@ -309,7 +345,10 @@ const TwoFactorChallenge = () => {
               variant="ghost"
               size="sm"
               className="w-full text-muted-foreground"
-              onClick={() => navigate('/login')}
+              onClick={() => {
+                sessionStorage.removeItem('2fa_challenge_id');
+                navigate('/login');
+              }}
             >
               Back to sign in
             </Button>

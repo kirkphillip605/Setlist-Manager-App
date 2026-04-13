@@ -71,34 +71,70 @@ A React + Vite PWA / Capacitor app for band setlist and gig management with full
 
 1. Sign in via email/password, Google OAuth, magic link, or email OTP
 2. BetterAuth sets an httpOnly session cookie (365-day expiry by default)
-3. `AuthContext` uses one-shot `authClient.getSession()` with cookie-presence check (no polling); all consumers (BandContext, useSyncedData) derive auth state from AuthContext
+3. `AuthContext` uses deduplicated `getSession()` with in-flight request sharing; caches last-known auth state for instant rendering on cold start
 4. `ProtectedRoute` checks: logged in → account active → profile complete (`isProfileComplete`) → has ≥1 band
 5. If profile incomplete → `/onboarding` (name entry, then optional 2FA prompt)
 6. If no bands → `/bands/setup` (create or join)
 7. Bearer token plugin enables API auth for mobile apps without cookies
 8. 2FA intercepts login when enabled — challenge screen at `/2fa-challenge` (TOTP, email OTP, recovery codes)
-9. Rate limiting enforced server-side (30 req/60s window)
+9. Rate limiting enforced server-side (30 req/60s window) with client-side exponential backoff + jitter
+
+### Rate-Limit Resilience
+- `apiFetch.ts` and `authClient.ts` both implement exponential backoff with jitter for 429 responses (up to 3 retries)
+- `ApiError` has a `retriedByClient` flag — when `apiFetch` exhausts its 429 retries, the thrown error is marked so React Query won't retry it again
+- React Query retry logic (`queryClient.ts`) skips retries on 4xx errors and on errors already retried by apiFetch
+- Concurrent `getSession()` calls are deduplicated via in-flight promise sharing in `AuthContext.tsx`
+- OTP send buttons have 30-second cooldown debouncing to prevent spam
+
+### Session Restoration
+- `PublicOnlyRoute` and `AppStatusWrapper` show a branded loading screen (spinner) instead of null during loading
+- Last-known auth state is cached in `storageAdapter`; `AuthContext` renders from cache immediately (`isPending=false`) while revalidating the session in the background
 
 ### Auth Bug Fixes Applied
-- **Onboarding loop fixed**: `authClient.updateUser()` updates BetterAuth session cache atomically alongside `apiPatch` to `/api/users/me`
-- **No session polling**: All `authClient.useSession()` calls replaced with state-based auth (AuthProvider one-shot getSession with cookie-presence check, BandContext/useSyncedData derive from AuthContext); WS client guards against no-session connections; Login.tsx does zero getSession calls
+- **Password reset flow**: `UpdatePassword.tsx` extracts reset token from URL search params and passes it to BetterAuth's `resetPassword` API; shows validation UI for invalid/expired tokens
+- **2FA guard**: `/2fa-challenge` route requires a `2fa_challenge_id` (crypto.randomUUID) in sessionStorage, set during login when BetterAuth signals 2FA is required; prevents unauthenticated/casual navigation; server-side 2FA challenge state managed by BetterAuth's own trust cookie mechanism
+- **2FA password confirmation**: `twoFactor.enable()` requires password confirmation; `twoFactor.disable()` available from Profile page
+- **Signup name**: `handleSignUp` no longer uses email as `name`; uses placeholder 'New User' (real name collected during onboarding)
+- **Dual-write removed**: Profile updates use only BetterAuth `updateUserProfile()` — no more separate `apiPatch('/api/users/me')` call
+- **No session polling**: All `authClient.useSession()` calls replaced with state-based auth
 - **Sign-up convergence**: Attempting to sign up with an existing email transitions to Sign In tab with email pre-filled
-- **Name fields removed from sign-up**: Registration only collects email + password; name is collected during onboarding
 
 ### 2FA Support
 - Two-factor auth via BetterAuth's `twoFactor` plugin (TOTP + email OTP)
-- Setup wizard at `/2fa-setup` with QR code, verify, and recovery code confirmation
-- Challenge screen at `/2fa-challenge` with TOTP, email OTP, or recovery code options
+- Setup wizard at `/2fa-setup` with QR code, verify, and recovery code confirmation (requires password)
+- Challenge screen at `/2fa-challenge` with TOTP, email OTP, or recovery code options (guarded by session flag)
+- 2FA management section on Profile page: status display, enable/disable toggle with password confirmation
 - Prompted (but skippable) after onboarding completion
 - OAuth users prompted to set password during onboarding (progressive completion wall)
 
+### Profile Page
+- Personal details (first/last name via BetterAuth only — no dual-write)
+- Avatar upload: reads image as data URL, passes to `updateUserProfile({ image })` via BetterAuth
+- Linked accounts section: shows connected providers (Google, credential) with unlink capability (if another auth method exists)
+- Phone number with OTP verification flow using BetterAuth's `phoneNumber` plugin
+- 2FA management: enable/disable with password confirmation, view/copy backup codes (password-protected)
+- Password change, account deletion, sign out
+
+### Capacitor Native Auth
+- Deep-link handler in `AppContent` correctly parses custom URL scheme (`com.kirknetllc.setlistpro://`)
+- `AuthCallback` extracts tokens from URL params for native redirect flows
+- Cookie persistence via `CapacitorCookies` enabled in `capacitor.config.ts`
+- Native Google sign-in via `@codetrix-studio/capacitor-google-auth` plugin — on native platforms, uses the native Google SDK to get an ID token, then exchanges it with BetterAuth's `signIn.social({ provider: 'google', idToken })` for session creation
+- Requires `VITE_GOOGLE_CLIENT_ID` env var for native Google auth initialization
+
 ### Type Safety
-- All auth-related `as any` casts replaced with typed helpers in `src/lib/authClient.ts`: `twoFactor` namespace, `updateUserProfile()`, `changeUserPassword()`, `resetUserPassword()`, `setInitialPassword()`
+- All auth-related `as any` casts replaced with typed helpers in `src/lib/authClient.ts`: `twoFactor` namespace, `updateUserProfile()`, `changeUserPassword()`, `resetUserPassword()`, `setInitialPassword()`, `listUserAccounts()`, `unlinkAccount()`
+- `AdditionalUserFields` includes `twoFactorEnabled` — no `as any` casts needed in Profile or elsewhere
+- Profile page uses `UserWithExtended` type alias (`AuthUser & { phone, phoneVerified, twoFactorEnabled }`) for proper typing
 - `GET /api/users/me/auth-providers` — returns provider info for progressive onboarding
 
 ### Phone Number Reassignment
 - `POST /api/users/me/reassign-phone` transfers verified numbers between users
 - Previous owner notified via transactional email
+
+### Database Indexes (Migration 0003)
+- `account.userId`, `session.userId`, `session.token`, `verification.identifier`, `verification.expiresAt`
+- Cleanup of expired verification records (older than 7 days)
 
 ## Session Persistence
 

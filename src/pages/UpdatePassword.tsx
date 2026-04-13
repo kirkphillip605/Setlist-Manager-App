@@ -1,38 +1,82 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { resetUserPassword } from '@/lib/authClient';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import { Loader2 } from 'lucide-react';
+import { Loader2, AlertTriangle } from 'lucide-react';
 
 const UpdatePassword = () => {
   const navigate  = useNavigate();
+  const [searchParams] = useSearchParams();
   const [password, setPassword]         = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading]           = useState(false);
 
+  const token = searchParams.get('token');
+
+  const [tokenError, setTokenError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!token) {
+      setTokenError('Invalid or missing reset link. Please request a new password reset.');
+    }
+  }, [token]);
+
   const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!token) {
+      toast.error('Missing reset token. Please request a new password reset link.');
+      return;
+    }
     if (password !== confirmPassword) {
       toast.error('Passwords do not match');
       return;
     }
+    if (password.length < 8) {
+      toast.error('Password must be at least 8 characters');
+      return;
+    }
     setLoading(true);
 
-    const result = await resetUserPassword({ newPassword: password });
+    const result = await resetUserPassword({ newPassword: password, token });
     const error = result?.error;
 
     if (error) {
-      toast.error(error.message ?? 'Failed to update password');
+      const msg = error.message ?? 'Failed to update password';
+      if (msg.toLowerCase().includes('expired') || msg.toLowerCase().includes('invalid')) {
+        setTokenError('This reset link has expired or is invalid. Please request a new one.');
+      }
+      toast.error(msg);
     } else {
-      toast.success('Password updated successfully!');
-      navigate('/');
+      toast.success('Password updated successfully! You can now sign in.');
+      navigate('/login');
     }
     setLoading(false);
   };
+
+  if (tokenError) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background p-4">
+        <Card className="w-full max-w-md">
+          <CardHeader className="text-center">
+            <div className="mx-auto bg-destructive/10 p-4 rounded-full mb-3">
+              <AlertTriangle className="h-8 w-8 text-destructive" />
+            </div>
+            <CardTitle>Invalid Reset Link</CardTitle>
+            <CardDescription>{tokenError}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button className="w-full" onClick={() => navigate('/login')}>
+              Back to Login
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
