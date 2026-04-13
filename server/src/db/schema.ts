@@ -22,7 +22,6 @@ export const users = pgTable('user', {
   isActive:          boolean('isActive').notNull().default(true),
   isProfileComplete: boolean('isProfileComplete').notNull().default(false),
   preferences:       jsonb('preferences').default({}),
-  bio:               text('bio'),
 });
 
 export const twoFactors = pgTable('twoFactor', {
@@ -90,7 +89,6 @@ export const bandMemberships = pgTable('band_memberships', {
   role:       text('role').notNull().default('member'),
   position:   text('position'),
   isApproved: boolean('is_approved').notNull().default(false),
-  isDefault:  boolean('is_default').notNull().default(false),
   invitedBy:  text('invited_by').references(() => users.id),
   joinedAt:   timestamp('joined_at'),
   createdAt:  timestamp('created_at').notNull().defaultNow(),
@@ -101,29 +99,10 @@ export const bandMemberships = pgTable('band_memberships', {
 export const bandBans = pgTable('band_bans', {
   id:       uuid('id').primaryKey().defaultRandom(),
   bandId:   uuid('band_id').notNull().references(() => bands.id, { onDelete: 'cascade' }),
-  userId:   text('user_id').references(() => users.id),
-  email:    text('email'),
+  userId:   text('user_id').notNull().references(() => users.id),
   bannedBy: text('banned_by').notNull().references(() => users.id),
   reason:   text('reason'),
   bannedAt: timestamp('banned_at').notNull().defaultNow(),
-});
-
-export const bandSupport = pgTable('band_support', {
-  id:        uuid('id').primaryKey().defaultRandom(),
-  bandId:    uuid('band_id').notNull().references(() => bands.id, { onDelete: 'cascade' }),
-  userId:    text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
-  grantedBy: text('granted_by').notNull().references(() => users.id),
-  grantedAt: timestamp('granted_at').notNull().defaultNow(),
-  revokedAt: timestamp('revoked_at'),
-});
-
-export const platformBans = pgTable('platform_bans', {
-  id:        uuid('id').primaryKey().defaultRandom(),
-  userId:    text('user_id').references(() => users.id),
-  email:     text('email').notNull(),
-  bannedBy:  text('banned_by').notNull().references(() => users.id),
-  bannedAt:  timestamp('banned_at').notNull().defaultNow(),
-  banReason: text('ban_reason'),
 });
 
 // ---------------------------------------------------------------

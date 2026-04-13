@@ -32,12 +32,12 @@ export interface BandMembership {
   role: BandRole;
   position: string | null;
   is_approved: boolean;
-  is_default: boolean;
   invited_by: string | null;
   joined_at: string | null;
   created_at: string;
   updated_at: string;
   deleted_at?: string | null;
+  // Hydrated fields
   user?: Pick<Profile, 'id' | 'first_name' | 'last_name' | 'email' | 'avatar_url'>;
 }
 
@@ -47,35 +47,10 @@ export interface BandMembership {
 export interface BandBan {
   id: string;
   band_id: string;
-  user_id: string | null;
-  email: string | null;
+  user_id: string;
   banned_by: string;
   reason: string | null;
   banned_at: string;
-}
-
-// ---------------------------------------------------------------
-// Band support — support staff assigned to specific bands
-// ---------------------------------------------------------------
-export interface BandSupport {
-  id: string;
-  band_id: string;
-  user_id: string;
-  granted_by: string;
-  granted_at: string;
-  revoked_at: string | null;
-}
-
-// ---------------------------------------------------------------
-// Platform ban — platform-wide ban by admins
-// ---------------------------------------------------------------
-export interface PlatformBan {
-  id: string;
-  user_id: string | null;
-  email: string;
-  banned_by: string;
-  banned_at: string;
-  ban_reason: string | null;
 }
 
 // ---------------------------------------------------------------
@@ -241,10 +216,6 @@ export interface Profile {
   first_name: string | null;
   last_name: string | null;
   avatar_url?: string;
-  phone?: string | null;
-  phone_verified?: boolean;
-  email_verified?: boolean;
-  bio?: string | null;
   platform_role: PlatformRole;
   is_active: boolean;
   is_profile_complete?: boolean;

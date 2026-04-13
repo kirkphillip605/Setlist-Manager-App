@@ -7,371 +7,52 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model User {
-  id               String    @id
-  name             String
-  email            String    @unique
-  emailVerified    Boolean   @default(false)
-  image            String?
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @default(now())
-  firstName        String?
-  lastName         String?
-  phone            String?
-  phoneVerified    Boolean?  @default(false)
-  platformRole     String    @default("user")
-  isActive         Boolean   @default(true)
-  isProfileComplete Boolean  @default(false)
-  preferences      Json?     @default("{}")
-  bio              String?
-
-  sessions         Session[]
-  accounts         Account[]
-  twoFactor        TwoFactor?
-  createdBands     Band[]           @relation("BandCreator")
-  memberships      BandMembership[] @relation("MemberUser")
-  invitedMembers   BandMembership[] @relation("MemberInviter")
-  bandBansReceived BandBan[]        @relation("BannedUser")
-  bandBansIssued   BandBan[]        @relation("BanIssuer")
-  supportAssigned  BandSupport[]    @relation("SupportUser")
-  supportGranted   BandSupport[]    @relation("SupportGranter")
-  platformBansIssued PlatformBan[]  @relation("PlatformBanIssuer")
-
-  @@map("user")
-}
-
-model Session {
-  id        String   @id
-  expiresAt DateTime
-  token     String   @unique
-  createdAt DateTime @default(now())
-  updatedAt DateTime @default(now())
-  ipAddress String?
-  userAgent String?
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@map("session")
-}
-
-model Account {
-  id                    String    @id
-  accountId             String
-  providerId            String
-  userId                String
-  accessToken           String?
-  refreshToken          String?
-  idToken               String?
-  accessTokenExpiresAt  DateTime?
-  refreshTokenExpiresAt DateTime?
-  scope                 String?
-  password              String?
-  createdAt             DateTime  @default(now())
-  updatedAt             DateTime  @default(now())
-  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@map("account")
-}
-
-model Verification {
-  id         String    @id
-  identifier String
-  value      String
-  expiresAt  DateTime
-  createdAt  DateTime? @default(now())
-  updatedAt  DateTime? @default(now())
-
-  @@map("verification")
-}
-
-model TwoFactor {
-  id          String @id
-  secret      String
-  backupCodes String
-  userId      String @unique
-  user        User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@map("twoFactor")
-}
-
-model Band {
-  id          String    @id @default(uuid()) @db.Uuid
-  name        String
-  description String?
-  joinCode    String    @unique @map("join_code") @db.Char(6)
-  createdBy   String    @map("created_by")
-  createdAt   DateTime  @default(now()) @map("created_at")
-  updatedAt   DateTime  @default(now()) @map("updated_at")
-  deletedAt   DateTime? @map("deleted_at")
-  deletedBy   String?   @map("deleted_by")
-
-  creator     User             @relation("BandCreator", fields: [createdBy], references: [id])
-  memberships BandMembership[]
-  bans        BandBan[]
-  support     BandSupport[]
-  songs       Song[]
-  setlists    Setlist[]
-  sets        Set[]
-  setSongs    SetSong[]
-  gigs        Gig[]
-  gigSessions GigSession[]
-  participants GigSessionParticipant[]
-  skippedSongs GigSkippedSong[]
-  leadershipRequests LeadershipRequest[]
-
-  @@map("bands")
-}
-
-model BandMembership {
-  id         String    @id @default(uuid()) @db.Uuid
-  bandId     String    @map("band_id") @db.Uuid
-  userId     String    @map("user_id")
-  role       String    @default("member")
-  position   String?
-  isApproved Boolean   @default(false) @map("is_approved")
-  isDefault  Boolean   @default(false) @map("is_default")
-  invitedBy  String?   @map("invited_by")
-  joinedAt   DateTime? @map("joined_at")
-  createdAt  DateTime  @default(now()) @map("created_at")
-  updatedAt  DateTime  @default(now()) @map("updated_at")
-  deletedAt  DateTime? @map("deleted_at")
-
-  band    Band @relation(fields: [bandId], references: [id], onDelete: Cascade)
-  user    User @relation("MemberUser", fields: [userId], references: [id], onDelete: Cascade)
-  inviter User? @relation("MemberInviter", fields: [invitedBy], references: [id])
-
-  @@unique([bandId, userId])
-  @@map("band_memberships")
-}
-
-model BandBan {
-  id       String   @id @default(uuid()) @db.Uuid
-  bandId   String   @map("band_id") @db.Uuid
-  userId   String?  @map("user_id")
-  email    String?
-  bannedBy String   @map("banned_by")
-  reason   String?
-  bannedAt DateTime @default(now()) @map("banned_at")
-
-  band      Band  @relation(fields: [bandId], references: [id], onDelete: Cascade)
-  user      User? @relation("BannedUser", fields: [userId], references: [id])
-  issuer    User  @relation("BanIssuer", fields: [bannedBy], references: [id])
-
-  @@map("band_bans")
-}
-
-model BandSupport {
-  id        String    @id @default(uuid()) @db.Uuid
-  bandId    String    @map("band_id") @db.Uuid
-  userId    String    @map("user_id")
-  grantedBy String    @map("granted_by")
-  grantedAt DateTime  @default(now()) @map("granted_at")
-  revokedAt DateTime? @map("revoked_at")
-
-  band    Band @relation(fields: [bandId], references: [id], onDelete: Cascade)
-  user    User @relation("SupportUser", fields: [userId], references: [id], onDelete: Cascade)
-  granter User @relation("SupportGranter", fields: [grantedBy], references: [id])
-
-  @@map("band_support")
-}
-
-model PlatformBan {
-  id        String   @id @default(uuid()) @db.Uuid
-  userId    String?  @map("user_id")
-  email     String
-  bannedBy  String   @map("banned_by")
-  bannedAt  DateTime @default(now()) @map("banned_at")
-  banReason String?  @map("ban_reason")
-
-  issuer User @relation("PlatformBanIssuer", fields: [bannedBy], references: [id])
-
-  @@map("platform_bans")
-}
-
 model Song {
-  id            String    @id @default(uuid()) @db.Uuid
-  bandId        String    @map("band_id") @db.Uuid
-  title         String
-  artist        String
-  lyrics        String    @default("")
-  key           String    @default("")
-  tempo         String    @default("")
-  duration      String    @default("")
-  note          String    @default("")
-  coverUrl      String?   @map("cover_url")
-  spotifyUrl    String?   @map("spotify_url")
-  isRetired     Boolean   @default(false) @map("is_retired")
-  createdBy     String?   @map("created_by")
-  lastUpdatedBy String?   @map("last_updated_by")
-  createdAt     DateTime  @default(now()) @map("created_at")
-  updatedAt     DateTime  @default(now()) @map("updated_at")
-  deletedAt     DateTime? @map("deleted_at")
-  deletedBy     String?   @map("deleted_by")
-  version       BigInt    @default(0)
-
-  band     Band      @relation(fields: [bandId], references: [id], onDelete: Cascade)
-  setSongs SetSong[]
-
-  @@map("songs")
+  id        String   @id @default(uuid())
+  title     String
+  artist    String
+  lyrics    String?
+  key       String?
+  tempo     String? // Stored as string to allow "120-130" or "Fast"
+  note      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  // Relations
+  setSongs  SetSong[]
 }
 
 model Setlist {
-  id            String    @id @default(uuid()) @db.Uuid
-  bandId        String    @map("band_id") @db.Uuid
-  name          String
-  isPersonal    Boolean   @default(false) @map("is_personal")
-  isDefault     Boolean   @default(false) @map("is_default")
-  createdBy     String?   @map("created_by")
-  lastUpdatedBy String?   @map("last_updated_by")
-  createdAt     DateTime  @default(now()) @map("created_at")
-  updatedAt     DateTime  @default(now()) @map("updated_at")
-  deletedAt     DateTime? @map("deleted_at")
-  deletedBy     String?   @map("deleted_by")
-  version       BigInt    @default(0)
-
-  band Band  @relation(fields: [bandId], references: [id], onDelete: Cascade)
-  sets Set[]
-
-  @@map("setlists")
+  id        String   @id @default(uuid())
+  name      String
+  date      DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  // Relations
+  sets      Set[]
 }
 
 model Set {
-  id        String    @id @default(uuid()) @db.Uuid
-  bandId    String    @map("band_id") @db.Uuid
-  setlistId String    @map("setlist_id") @db.Uuid
-  name      String
-  position  Int
-  createdBy String?   @map("created_by")
-  createdAt DateTime  @default(now()) @map("created_at")
-  updatedAt DateTime  @default(now()) @map("updated_at")
-  deletedAt DateTime? @map("deleted_at")
-  deletedBy String?   @map("deleted_by")
-  version   BigInt    @default(0)
-
-  band    Band      @relation(fields: [bandId], references: [id], onDelete: Cascade)
-  setlist Setlist   @relation(fields: [setlistId], references: [id], onDelete: Cascade)
-  songs   SetSong[]
-
-  @@map("sets")
+  id        String   @id @default(uuid())
+  name      String   // e.g. "Set 1", "Encore"
+  position  Int      // Order of the set in the setlist
+  setlistId String
+  
+  // Relations
+  setlist   Setlist  @relation(fields: [setlistId], references: [id], onDelete: Cascade)
+  songs     SetSong[]
 }
 
 model SetSong {
-  id        String    @id @default(uuid()) @db.Uuid
-  bandId    String    @map("band_id") @db.Uuid
-  setId     String    @map("set_id") @db.Uuid
-  songId    String    @map("song_id") @db.Uuid
-  position  Int
-  createdBy String?   @map("created_by")
-  createdAt DateTime  @default(now()) @map("created_at")
-  updatedAt DateTime  @default(now()) @map("updated_at")
-  deletedAt DateTime? @map("deleted_at")
-  deletedBy String?   @map("deleted_by")
-  version   BigInt    @default(0)
-
-  band Band @relation(fields: [bandId], references: [id], onDelete: Cascade)
-  set  Set  @relation(fields: [setId], references: [id], onDelete: Cascade)
-  song Song @relation(fields: [songId], references: [id])
-
+  id        String   @id @default(uuid())
+  position  Int      // Order of the song in the set
+  songId    String
+  setId     String
+  
+  // Relations
+  song      Song     @relation(fields: [songId], references: [id])
+  set       Set      @relation(fields: [setId], references: [id], onDelete: Cascade)
+  
   @@unique([setId, position])
-  @@map("set_songs")
-}
-
-model Gig {
-  id                 String    @id @default(uuid()) @db.Uuid
-  bandId             String    @map("band_id") @db.Uuid
-  name               String
-  startTime          DateTime  @map("start_time")
-  endTime            DateTime? @map("end_time")
-  notes              String    @default("")
-  setlistId          String?   @map("setlist_id") @db.Uuid
-  venueName          String?   @map("venue_name")
-  address            String?
-  city               String?
-  state              String?
-  zip                String?
-  createdBy          String?   @map("created_by")
-  lastUpdatedBy      String?   @map("last_updated_by")
-  createdAt          DateTime  @default(now()) @map("created_at")
-  updatedAt          DateTime  @default(now()) @map("updated_at")
-  deletedAt          DateTime? @map("deleted_at")
-  deletedBy          String?   @map("deleted_by")
-  cancelledAt        DateTime? @map("cancelled_at")
-  cancellationReason String?   @map("cancellation_reason")
-  version            BigInt    @default(0)
-
-  band        Band             @relation(fields: [bandId], references: [id], onDelete: Cascade)
-  sessions    GigSession[]
-  skippedSongs GigSkippedSong[]
-
-  @@map("gigs")
-}
-
-model GigSession {
-  id               String    @id @default(uuid()) @db.Uuid
-  bandId           String    @map("band_id") @db.Uuid
-  gigId            String    @map("gig_id") @db.Uuid
-  leaderId         String    @map("leader_id")
-  currentSetIndex  Int       @default(0) @map("current_set_index")
-  currentSongIndex Int       @default(0) @map("current_song_index")
-  adhocSongId      String?   @map("adhoc_song_id") @db.Uuid
-  isActive         Boolean   @default(true) @map("is_active")
-  isOnBreak        Boolean   @default(false) @map("is_on_break")
-  startedAt        DateTime  @default(now()) @map("started_at")
-  lastHeartbeat    DateTime  @default(now()) @map("last_heartbeat")
-  endedAt          DateTime? @map("ended_at")
-  version          BigInt    @default(0)
-
-  band         Band                    @relation(fields: [bandId], references: [id], onDelete: Cascade)
-  gig          Gig                     @relation(fields: [gigId], references: [id], onDelete: Cascade)
-  participants GigSessionParticipant[]
-  leadershipRequests LeadershipRequest[]
-
-  @@map("gig_sessions")
-}
-
-model GigSessionParticipant {
-  id        String   @id @default(uuid()) @db.Uuid
-  bandId    String   @map("band_id") @db.Uuid
-  sessionId String   @map("session_id") @db.Uuid
-  userId    String   @map("user_id")
-  lastSeen  DateTime @default(now()) @map("last_seen")
-  version   BigInt   @default(0)
-
-  band    Band       @relation(fields: [bandId], references: [id], onDelete: Cascade)
-  session GigSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-
-  @@unique([sessionId, userId])
-  @@map("gig_session_participants")
-}
-
-model GigSkippedSong {
-  id        String   @id @default(uuid()) @db.Uuid
-  bandId    String   @map("band_id") @db.Uuid
-  gigId     String   @map("gig_id") @db.Uuid
-  songId    String   @map("song_id") @db.Uuid
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @default(now()) @map("updated_at")
-  version   BigInt   @default(0)
-
-  band Band @relation(fields: [bandId], references: [id], onDelete: Cascade)
-  gig  Gig  @relation(fields: [gigId], references: [id], onDelete: Cascade)
-
-  @@unique([gigId, songId])
-  @@map("gig_skipped_songs")
-}
-
-model LeadershipRequest {
-  id          String   @id @default(uuid()) @db.Uuid
-  bandId      String   @map("band_id") @db.Uuid
-  sessionId   String   @map("session_id") @db.Uuid
-  requesterId String   @map("requester_id")
-  status      String   @default("pending")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @default(now()) @map("updated_at")
-  version     BigInt   @default(0)
-
-  band    Band       @relation(fields: [bandId], references: [id], onDelete: Cascade)
-  session GigSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-
-  @@map("leadership_requests")
 }
