@@ -15,7 +15,7 @@ import { useImmer } from "use-immer";
 import { SetlistHeader } from "@/components/SetlistHeader";
 import { SetCard } from "@/components/SetCard";
 import { AddSongDialog } from "@/components/AddSongDialog";
-import { useSetlistWithSongs, useSyncedSongs } from "@/hooks/useSyncedData";
+import { useSetlistWithSongs, useSyncedSongs, useSyncAfterMutation } from "@/hooks/useSyncedData";
 import { useNetworkStatus } from "@/hooks/useNetworkStatus";
 import { Setlist, Set as SetType, SetSong } from "@/types";
 import { LoadingDialog } from "@/components/LoadingDialog";
@@ -29,6 +29,7 @@ const SetlistDetail = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const isOnline = useNetworkStatus();
+  const syncAfterMutation = useSyncAfterMutation();
   const { canEditSetlist } = useAuth();
   const { activeBandId } = useBand();
   
@@ -347,6 +348,7 @@ const SetlistDetail = () => {
       onSuccess: () => {
           queryClient.invalidateQueries({ queryKey: ['setlist', id] });
           queryClient.invalidateQueries({ queryKey: ['setlists'] });
+          syncAfterMutation();
           setIsDirty(false);
           setHistory([]);
           toast.success("Changes saved successfully");

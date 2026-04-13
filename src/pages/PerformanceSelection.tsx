@@ -6,7 +6,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { useSyncedSetlists, useSyncedGigs } from "@/hooks/useSyncedData";
+import { useSyncedSetlists, useSyncedGigs, useSyncAfterMutation } from "@/hooks/useSyncedData";
 import { PerformanceSessionDialog } from "@/components/PerformanceSessionDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,6 +21,7 @@ const PerformanceSelection = () => {
   const isOnline = useNetworkStatus();
   const queryClient = useQueryClient();
   const { activeBandId } = useBand();
+  const syncAfterMutation = useSyncAfterMutation();
   const [mode, setMode] = useState<"gig" | "practice" | null>(null);
   
   // Session Init State
@@ -55,14 +56,15 @@ const PerformanceSelection = () => {
 
   const createMutation = useMutation({
     mutationFn: async () => {
-       return createSetlist(activeBandId!, newListName, true, false); // Create Personal Setlist by default
+       return createSetlist(activeBandId!, newListName, true, false);
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['setlists'] });
+      syncAfterMutation();
       setNewListName("");
       setIsCreateOpen(false);
-      setMode(null); // Close selection dialog
-      if (data?.id) navigate(`/setlists/${data.id}`); // Navigate to edit the new list
+      setMode(null);
+      if (data?.id) navigate(`/setlists/${data.id}`);
     },
     onError: () => toast.error("Failed to create setlist")
   });

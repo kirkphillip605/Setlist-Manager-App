@@ -17,7 +17,7 @@ import {
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription
 } from "@/components/ui/alert-dialog";
 import { Link, useNavigate } from "react-router-dom";
-import { useSyncedGigs, useSyncedSetlists } from "@/hooks/useSyncedData";
+import { useSyncedGigs, useSyncedSetlists, useSyncAfterMutation } from "@/hooks/useSyncedData";
 import { useNetworkStatus } from "@/hooks/useNetworkStatus";
 import { LoadingDialog } from "@/components/LoadingDialog";
 import { format, parseISO } from "date-fns";
@@ -29,6 +29,7 @@ const Gigs = () => {
     const navigate = useNavigate();
     const queryClient = useQueryClient();
     const isOnline = useNetworkStatus();
+    const syncAfterMutation = useSyncAfterMutation();
     const { activeBandId, isManager: canManageGigs } = useBand();
     
     const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -69,6 +70,7 @@ const Gigs = () => {
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['gigs'] });
+            syncAfterMutation();
             setGigToCancel(null);
             setCancelReason("");
             setCustomReason("");
@@ -98,6 +100,7 @@ const Gigs = () => {
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['gigs'] });
+            syncAfterMutation();
             setGigToReschedule(null);
             toast.success("Gig rescheduled");
         },

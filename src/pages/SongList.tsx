@@ -19,7 +19,7 @@ import {
   AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { useSyncedSongs } from "@/hooks/useSyncedData";
+import { useSyncedSongs, useSyncAfterMutation } from "@/hooks/useSyncedData";
 import { useNetworkStatus } from "@/hooks/useNetworkStatus";
 import { LoadingDialog } from "@/components/LoadingDialog";
 import { AlbumArtwork } from "@/components/AlbumArtwork";
@@ -127,6 +127,7 @@ const SongList = () => {
 
   const queryClient = useQueryClient();
   const isOnline = useNetworkStatus();
+  const syncAfterMutation = useSyncAfterMutation();
   const { activeBandId, isManager: canManageSongs } = useBand();
 
   // Use the Synced Hook (Master Catalog)
@@ -136,6 +137,7 @@ const SongList = () => {
     mutationFn: (id: string) => deleteSong(activeBandId!, id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['songs'] });
+      syncAfterMutation();
       setSongToDelete(null);
       setUsageData([]);
       toast.success("Song deleted permanently");
@@ -151,6 +153,7 @@ const SongList = () => {
     },
     onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: ['songs'] });
+        syncAfterMutation();
         setSongToDelete(null);
         setUsageData([]);
         toast.success("Song retired successfully");

@@ -14,7 +14,7 @@ import { useState, useMemo, useEffect } from "react";
 import { toast } from "sonner";
 import { useBand } from "@/context/BandContext";
 import { Gig } from "@/types";
-import { useSyncedGigs, useSyncedSetlists } from "@/hooks/useSyncedData";
+import { useSyncedGigs, useSyncedSetlists, useSyncAfterMutation } from "@/hooks/useSyncedData";
 import { useNetworkStatus } from "@/hooks/useNetworkStatus";
 import { LoadingDialog } from "@/components/LoadingDialog";
 import { format, parseISO, differenceInMinutes } from "date-fns";
@@ -30,6 +30,7 @@ const GigDetail = () => {
     const { activeBandId, isManager: canManageGigs } = useBand();
     const queryClient = useQueryClient();
     const isOnline = useNetworkStatus();
+    const syncAfterMutation = useSyncAfterMutation();
     
     const [isEditOpen, setIsEditOpen] = useState(false);
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -54,6 +55,7 @@ const GigDetail = () => {
         mutationFn: (gig: Partial<Gig>) => saveGig(activeBandId!, gig),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['gigs'] });
+            syncAfterMutation();
             setIsEditOpen(false);
             toast.success("Gig updated");
         },
@@ -64,6 +66,7 @@ const GigDetail = () => {
         mutationFn: (id: string) => deleteGig(activeBandId!, id),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['gigs'] });
+            syncAfterMutation();
             toast.success("Gig deleted");
             navigate("/gigs");
         },

@@ -14,6 +14,7 @@ import { toast } from "sonner";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ChevronLeft, Save, Search, Music, Loader2, ArrowRight, CloudOff } from "lucide-react";
 import { useSongFromCache } from "@/hooks/useData";
+import { useSyncAfterMutation } from "@/hooks/useSyncedData";
 import { useNetworkStatus } from "@/hooks/useNetworkStatus";
 import { LoadingDialog } from "@/components/LoadingDialog";
 import { AlbumArtwork } from "@/components/AlbumArtwork";
@@ -23,6 +24,7 @@ const SongEdit = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const isOnline = useNetworkStatus();
+  const syncAfterMutation = useSyncAfterMutation();
   const { activeBandId, isManager: canManageSongs } = useBand();
 
   useEffect(() => {
@@ -74,6 +76,7 @@ const SongEdit = () => {
     onSuccess: () => {
       toast.success(id ? "Song updated!" : "Song added!");
       queryClient.invalidateQueries({ queryKey: ['songs'] });
+      syncAfterMutation();
       navigate("/songs");
     },
     onError: (error) => {

@@ -5,6 +5,20 @@ import { useBand } from '@/context/BandContext';
 import { getAllSkippedSongs } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 
+export const useSyncAfterMutation = () => {
+  const syncDelta = useStore(state => state.syncDelta);
+  const isOnline = useStore(state => state.isOnline);
+  const { activeBandId } = useBand();
+
+  return useCallback(() => {
+    if (isOnline && activeBandId) {
+      syncDelta(activeBandId).catch((err) => {
+        console.warn('[SyncAfterMutation] Delta sync failed:', err);
+      });
+    }
+  }, [syncDelta, isOnline, activeBandId]);
+};
+
 export const useSyncManager = () => {
   const { loading: isPending } = useAuth();
   const initialize     = useStore(state => state.initialize);

@@ -48,7 +48,7 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { useSongFromCache } from "@/hooks/useSyncedData";
+import { useSongFromCache, useSyncAfterMutation } from "@/hooks/useSyncedData";
 import { useNetworkStatus } from "@/hooks/useNetworkStatus";
 import { AlbumArtwork } from "@/components/AlbumArtwork";
 
@@ -57,6 +57,7 @@ const SongDetail = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const isOnline = useNetworkStatus();
+  const syncAfterMutation = useSyncAfterMutation();
   const { openMetronome, closeMetronome, isPlaying, bpm, isOpen } = useMetronome();
   
   const { isAdmin } = useAuth();
@@ -108,6 +109,7 @@ const SongDetail = () => {
     onSuccess: () => {
       toast.success("Song deleted");
       queryClient.invalidateQueries({ queryKey: ['songs'] });
+      syncAfterMutation();
       navigate("/songs");
     },
     onError: () => {
@@ -119,6 +121,7 @@ const SongDetail = () => {
     mutationFn: (song: Partial<import('@/types').Song>) => saveSong(activeBandId!, song),
     onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: ['songs'] });
+        syncAfterMutation();
         toast.success("Song updated");
         setIsSearchOpen(false);
         setShowBpmDialog(false);

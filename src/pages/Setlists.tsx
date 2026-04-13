@@ -26,7 +26,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Gig, Setlist } from "@/types";
-import { useSyncedSetlists } from "@/hooks/useSyncedData";
+import { useSyncedSetlists, useSyncAfterMutation } from "@/hooks/useSyncedData";
 import { useNetworkStatus } from "@/hooks/useNetworkStatus";
 import { LoadingDialog } from "@/components/LoadingDialog";
 import { useAuth } from "@/context/AuthContext";
@@ -59,6 +59,7 @@ const Setlists = () => {
   const [isCheckingUsage, setIsCheckingUsage] = useState(false);
 
   const queryClient = useQueryClient();
+  const syncAfterMutation = useSyncAfterMutation();
   
   // Use Synced Hook
   const { data: setlists = [], isLoading } = useSyncedSetlists();
@@ -92,6 +93,7 @@ const Setlists = () => {
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['setlists'] });
+      syncAfterMutation();
       resetForm();
       if (data?.id) navigate(`/setlists/${data.id}`);
     }
@@ -101,6 +103,7 @@ const Setlists = () => {
     mutationFn: (id: string) => deleteSetlist(activeBandId!, id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['setlists'] });
+      syncAfterMutation();
       setDeleteId(null);
       setUsageData([]);
       toast.success("Setlist deleted");
@@ -111,6 +114,7 @@ const Setlists = () => {
       mutationFn: (id: string) => convertSetlistToBand(activeBandId!, id),
       onSuccess: () => {
           queryClient.invalidateQueries({ queryKey: ['setlists'] });
+          syncAfterMutation();
           setConvertId(null);
           toast.success("Setlist converted to Band Setlist");
       }
