@@ -10,7 +10,7 @@ import { saveGig, deleteGig } from "@/lib/api";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { Loader2, MapPin, Calendar, Edit, ListMusic, ChevronLeft, Navigation, CloudOff, Clock, Trash2, AlertTriangle, Play } from "lucide-react";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { toast } from "sonner";
 import { useBand } from "@/context/BandContext";
 import { Gig } from "@/types";
@@ -38,8 +38,14 @@ const GigDetail = () => {
     // Performance Dialog
     const [isSessionOpen, setIsSessionOpen] = useState(false);
 
-    const { data: gigs = [], isLoading } = useSyncedGigs();
+    const { data: gigs = [], isLoading: gigsLoading } = useSyncedGigs();
     const gig = useMemo(() => gigs.find(g => g.id === id), [gigs, id]);
+
+    useEffect(() => {
+        if (!gigsLoading && !gig) {
+            navigate('/', { replace: true });
+        }
+    }, [gigsLoading, gig, navigate]);
 
     const { data: setlists = [] } = useSyncedSetlists();
     const bandSetlists = useMemo(() => setlists.filter(s => !s.is_personal), [setlists]);
@@ -133,17 +139,13 @@ const GigDetail = () => {
         navigate(url);
     };
 
-    if (isLoading && !gig) return (
+    if (gigsLoading && !gig) return (
         <AppLayout>
             <div className="flex justify-center p-8"><Loader2 className="h-8 w-8 animate-spin" /></div>
         </AppLayout>
     );
 
-    if (!gig) return (
-        <AppLayout>
-            <div className="text-center p-8">Gig not found</div>
-        </AppLayout>
-    );
+    if (!gig) return null;
 
     const isPast = new Date(gig.end_time || gig.start_time) < new Date();
     const canEdit = canManageGigs && !isPast && isOnline;

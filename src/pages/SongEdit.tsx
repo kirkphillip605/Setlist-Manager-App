@@ -57,6 +57,12 @@ const SongEdit = () => {
   const song = useSongFromCache(id);
 
   useEffect(() => {
+    if (id && !song) {
+      navigate('/', { replace: true });
+    }
+  }, [id, song, navigate]);
+
+  useEffect(() => {
     if (song) {
       reset(song);
       setMode('edit');

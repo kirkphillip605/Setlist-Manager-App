@@ -33,7 +33,7 @@ export const BandSwitcher = ({ variant, collapsed }: BandSwitcherProps) => {
       setActiveBand(confirmBandId);
       setConfirmBandId(null);
       setShowDialog(false);
-      setTimeout(() => window.location.reload(), 100);
+      setTimeout(() => { window.location.href = '/'; }, 100);
     }
   };
 

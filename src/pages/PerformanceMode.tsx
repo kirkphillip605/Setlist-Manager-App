@@ -282,6 +282,12 @@ const PerformanceMode = () => {
   const { data: allSongs = [] } = useSyncedSongs();
   const { data: allSkipped = [] } = useSyncedSkippedSongs();
 
+  useEffect(() => {
+    if (!setlist && id) {
+      navigate('/performance', { replace: true });
+    }
+  }, [setlist, id, navigate]);
+
   const skippedSongs = useMemo(() => {
       if (!gigId) return [];
       return allSkipped

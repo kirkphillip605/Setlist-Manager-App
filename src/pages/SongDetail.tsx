@@ -213,11 +213,13 @@ const SongDetail = () => {
       }
   };
 
-  if (!song) return (
-    <AppLayout>
-      <div className="text-center p-8">Song not found</div>
-    </AppLayout>
-  );
+  useEffect(() => {
+    if (!song) {
+      navigate('/', { replace: true });
+    }
+  }, [song, navigate]);
+
+  if (!song) return null;
 
   return (
     <AppLayout>

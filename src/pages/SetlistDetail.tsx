@@ -4,7 +4,7 @@ import { syncSetlist } from "@/lib/api";
 import { useBand } from "@/context/BandContext";
 import { parseDurationToSeconds, formatDurationRounded } from "@/lib/utils";
 import { useState, useEffect, useCallback } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -26,6 +26,7 @@ const cloneSetlistData = (data: Setlist): Setlist => JSON.parse(JSON.stringify(d
 
 const SetlistDetail = () => {
   const { id } = useParams();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const isOnline = useNetworkStatus();
   const { canEditSetlist } = useAuth();
@@ -365,13 +366,24 @@ const SetlistDetail = () => {
 
   // --- Render ---
 
-  if (!localSetlist) return (
-    <AppLayout>
-      <div className="flex justify-center p-8">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    </AppLayout>
-  );
+  useEffect(() => {
+    if (!fetchedSetlist) {
+      navigate('/', { replace: true });
+    }
+  }, [fetchedSetlist, navigate]);
+
+  if (!localSetlist) {
+    if (!fetchedSetlist) {
+      return null;
+    }
+    return (
+      <AppLayout>
+        <div className="flex justify-center p-8">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      </AppLayout>
+    );
+  }
 
   return (
     <AppLayout>
