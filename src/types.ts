@@ -229,6 +229,25 @@ export interface Profile {
 }
 
 // ---------------------------------------------------------------
+// Band Invitation
+// ---------------------------------------------------------------
+export type InvitationStatus = 'pending' | 'accepted' | 'declined' | 'expired';
+
+export interface BandInvitation {
+  id: string;
+  band_id: string;
+  band_name?: string;
+  invited_email: string | null;
+  invited_phone: string | null;
+  invited_by: string;
+  inviter_name?: string;
+  status: InvitationStatus;
+  join_code_snapshot: string;
+  created_at: string;
+  updated_at?: string;
+}
+
+// ---------------------------------------------------------------
 // Legacy alias — keeps old code working during migration
 // ---------------------------------------------------------------
 export type UserRole = BandRole;

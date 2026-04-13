@@ -221,3 +221,22 @@ export const requestDeleteOtp = (bandId: string) =>
 
 export const deleteBand = (bandId: string, otp: string) =>
   apiPost(`/api/bands/${bandId}/delete`, { otp });
+
+// ── Band Invitations ──────────────────────────────────────────────
+
+export const sendBandInvitations = (bandId: string, invites: Array<{ email?: string; phone?: string }>) =>
+  apiPost<{ results: Array<{ email?: string; phone?: string; status: string; id?: string }> }>(
+    `/api/bands/${bandId}/invitations`, { invites }
+  );
+
+export const getBandInvitations = (bandId: string) =>
+  apiGet<import('@/types').BandInvitation[]>(`/api/bands/${bandId}/invitations`);
+
+export const getMyInvitations = () =>
+  apiGet<import('@/types').BandInvitation[]>('/api/invitations/mine');
+
+export const acceptInvitation = (invitationId: string) =>
+  apiPost<{ bandId: string; status: string }>(`/api/invitations/${invitationId}/accept`);
+
+export const declineInvitation = (invitationId: string) =>
+  apiPost<{ status: string }>(`/api/invitations/${invitationId}/decline`);

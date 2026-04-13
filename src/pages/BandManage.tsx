@@ -9,9 +9,11 @@ import {
   regenerateJoinCode, updateBand,
   getBannedUsers, banUser, unbanUser,
   transferOwnership, requestDeleteOtp, deleteBand,
+  getBandInvitations,
 } from '@/lib/api';
-import type { BandMembership, BandBan, BandRole } from '@/types';
+import type { BandMembership, BandBan, BandRole, BandInvitation } from '@/types';
 import AppLayout from '@/components/AppLayout';
+import InviteMembersDialog from '@/components/InviteMembersDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -32,7 +34,7 @@ import {
 import {
   Copy, RefreshCw, Check, Users, Shield, UserX, Loader2,
   ChevronLeft, UserCheck, UserMinus, Crown, Trash2, Ban, Mail,
-  Calendar,
+  Calendar, Phone, Send,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -101,6 +103,19 @@ const BandManage = () => {
   const [sendingOtp, setSendingOtp]     = useState(false);
   const [ownerEmail, setOwnerEmail]     = useState('');
 
+  const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
+  const [sentInvitations, setSentInvitations] = useState<BandInvitation[]>([]);
+
+  const loadInvitations = useCallback(async () => {
+    if (!activeBandId || !isManager) return;
+    try {
+      const inv = await getBandInvitations(activeBandId);
+      setSentInvitations(inv ?? []);
+    } catch {
+      // silent
+    }
+  }, [activeBandId, isManager]);
+
   const load = useCallback(async () => {
     if (!activeBandId) return;
     setLoading(true);
@@ -126,7 +141,7 @@ const BandManage = () => {
     setJoinCode(activeBand?.joinCode ?? '');
   }, [activeBand]);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => { void load(); void loadInvitations(); }, [load, loadInvitations]);
 
   const copyCode = () => {
     if (!joinCode) return;
@@ -376,12 +391,18 @@ const BandManage = () => {
                     : <Copy className="h-4 w-4" />}
                 </Button>
               </div>
-              <Button variant="outline" size="sm" onClick={handleRegen} disabled={regenLoading}>
-                {regenLoading
-                  ? <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                  : <RefreshCw className="h-4 w-4 mr-2" />}
-                Regenerate Code
-              </Button>
+              <div className="flex gap-2 flex-wrap">
+                <Button variant="outline" size="sm" onClick={handleRegen} disabled={regenLoading}>
+                  {regenLoading
+                    ? <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    : <RefreshCw className="h-4 w-4 mr-2" />}
+                  Regenerate Code
+                </Button>
+                <Button size="sm" onClick={() => setInviteDialogOpen(true)}>
+                  <Send className="h-4 w-4 mr-2" />
+                  Invite Member(s)
+                </Button>
+              </div>
             </div>
           </section>
         )}
@@ -445,6 +466,42 @@ const BandManage = () => {
           )}
         </section>
 
+        {/* Invitations Sent */}
+        {isManager && sentInvitations.length > 0 && (
+          <section className="space-y-3">
+            <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+              <Send className="h-4 w-4" /> Invitations Sent ({sentInvitations.length})
+            </h2>
+            <div className="bg-card border rounded-xl divide-y overflow-hidden">
+              {sentInvitations.map(inv => (
+                <div key={inv.id} className="flex items-center gap-3 p-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      {inv.invited_email ? (
+                        <Mail className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                      ) : (
+                        <Phone className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                      )}
+                      <p className="text-sm truncate">
+                        {inv.invited_email ?? inv.invited_phone}
+                      </p>
+                    </div>
+                    <p className="text-xs text-muted-foreground ml-5">
+                      Invited by {inv.inviter_name} &middot; {new Date(inv.created_at).toLocaleDateString()}
+                    </p>
+                  </div>
+                  <Badge
+                    variant={inv.status === 'accepted' ? 'default' : inv.status === 'declined' ? 'destructive' : 'secondary'}
+                    className="text-xs shrink-0"
+                  >
+                    {inv.status}
+                  </Badge>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
         {/* Owner Actions */}
         {isOwner && (
           <>
@@ -465,6 +522,7 @@ const BandManage = () => {
               </div>
             </section>
           </>
+        
         )}
 
         <Separator />
@@ -473,6 +531,15 @@ const BandManage = () => {
           Band ID: <span className="font-mono">{activeBandId}</span>
         </p>
       </div>
+
+      {activeBandId && (
+        <InviteMembersDialog
+          open={inviteDialogOpen}
+          onOpenChange={setInviteDialogOpen}
+          bandId={activeBandId}
+          onInvitesSent={loadInvitations}
+        />
+      )}
 
       {/* Remove Member Dialog */}
       <AlertDialog open={!!confirmRemove} onOpenChange={o => { if (!o) { setConfirmRemove(null); setBanOnRemove(false); } }}>

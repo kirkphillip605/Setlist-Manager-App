@@ -1,25 +1,93 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect, useCallback } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { useBand } from '@/context/BandContext';
-import { createBand, joinBand } from '@/lib/api';
+import { createBand, joinBand, getMyInvitations, acceptInvitation, declineInvitation } from '@/lib/api';
+import type { BandInvitation } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Loader2, Music2, Plus, LogIn, LogOut } from 'lucide-react';
+import { Loader2, Music2, Plus, LogIn, LogOut, Mail, Check, X } from 'lucide-react';
 import { toast } from 'sonner';
 
 const BandSetup = () => {
   const { signOut } = useAuth();
   const { refreshBands, setActiveBand } = useBand();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+
+  const urlJoinCode = searchParams.get('joinCode') ?? '';
 
   const [loading, setLoading]       = useState(false);
   const [bandName, setBandName]     = useState('');
   const [bandDesc, setBandDesc]     = useState('');
-  const [joinCode, setJoinCode]     = useState('');
+
+  const storedJoinCode = typeof window !== 'undefined'
+    ? sessionStorage.getItem('pendingJoinCode') ?? ''
+    : '';
+  const initialJoinCode = urlJoinCode || storedJoinCode;
+  const [joinCode, setJoinCode]     = useState(initialJoinCode);
+
+  useEffect(() => {
+    if (urlJoinCode) {
+      sessionStorage.setItem('pendingJoinCode', urlJoinCode);
+    }
+  }, [urlJoinCode]);
+
+  useEffect(() => {
+    if (initialJoinCode) {
+      sessionStorage.removeItem('pendingJoinCode');
+    }
+  }, []);
+  const [invitations, setInvitations] = useState<BandInvitation[]>([]);
+  const [loadingInvitations, setLoadingInvitations] = useState(false);
+  const [processingInvId, setProcessingInvId] = useState<string | null>(null);
+
+  const loadInvitations = useCallback(async () => {
+    setLoadingInvitations(true);
+    try {
+      const inv = await getMyInvitations();
+      setInvitations(inv ?? []);
+    } catch {
+      // silent
+    } finally {
+      setLoadingInvitations(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadInvitations();
+  }, [loadInvitations]);
+
+  const handleAcceptInvitation = async (inv: BandInvitation) => {
+    setProcessingInvId(inv.id);
+    try {
+      const result = await acceptInvitation(inv.id);
+      await refreshBands();
+      setActiveBand(result.bandId);
+      toast.success(`Joined ${inv.band_name ?? 'band'} successfully!`);
+      navigate('/');
+    } catch (err: any) {
+      toast.error(err?.message ?? 'Failed to accept invitation');
+    } finally {
+      setProcessingInvId(null);
+    }
+  };
+
+  const handleDeclineInvitation = async (inv: BandInvitation) => {
+    setProcessingInvId(inv.id);
+    try {
+      await declineInvitation(inv.id);
+      toast.success('Invitation declined');
+      setInvitations(prev => prev.filter(i => i.id !== inv.id));
+    } catch (err: any) {
+      toast.error(err?.message ?? 'Failed to decline invitation');
+    } finally {
+      setProcessingInvId(null);
+    }
+  };
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -70,7 +138,7 @@ const BandSetup = () => {
         </CardHeader>
 
         <CardContent>
-          <Tabs defaultValue="create">
+          <Tabs defaultValue={initialJoinCode ? 'join' : 'create'}>
             <TabsList className="grid grid-cols-2 w-full mb-6">
               <TabsTrigger value="create">
                 <Plus className="h-4 w-4 mr-2" />
@@ -141,6 +209,55 @@ const BandSetup = () => {
               </form>
             </TabsContent>
           </Tabs>
+
+          {/* Incoming Invitations */}
+          {loadingInvitations ? (
+            <div className="flex justify-center py-4">
+              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+            </div>
+          ) : invitations.length > 0 ? (
+            <div className="mt-6 space-y-3">
+              <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+                <Mail className="h-4 w-4" /> Pending Invitations
+              </h3>
+              <div className="border rounded-lg divide-y overflow-hidden">
+                {invitations.map(inv => (
+                  <div key={inv.id} className="p-3 space-y-2">
+                    <div>
+                      <p className="font-medium text-sm">{inv.band_name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        Invited by {inv.inviter_name}
+                      </p>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        className="flex-1"
+                        onClick={() => handleAcceptInvitation(inv)}
+                        disabled={processingInvId === inv.id}
+                      >
+                        {processingInvId === inv.id ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
+                        ) : (
+                          <Check className="h-3.5 w-3.5 mr-1" />
+                        )}
+                        Accept
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleDeclineInvitation(inv)}
+                        disabled={processingInvId === inv.id}
+                      >
+                        <X className="h-3.5 w-3.5 mr-1" />
+                        Decline
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
         </CardContent>
 
         <CardFooter>

@@ -232,6 +232,18 @@ export const gigSkippedSongs = pgTable('gig_skipped_songs', {
   version:   bigint('version', { mode: 'number' }).notNull().default(0),
 }, (t) => [unique().on(t.gigId, t.songId)]);
 
+export const bandInvitations = pgTable('band_invitations', {
+  id:            uuid('id').primaryKey().defaultRandom(),
+  bandId:        uuid('band_id').notNull().references(() => bands.id, { onDelete: 'cascade' }),
+  invitedEmail:  text('invited_email'),
+  invitedPhone:  text('invited_phone'),
+  invitedBy:     text('invited_by').notNull().references(() => users.id),
+  status:        text('status').notNull().default('pending'),
+  joinCodeSnapshot: char('join_code_snapshot', { length: 6 }).notNull(),
+  createdAt:     timestamp('created_at').notNull().defaultNow(),
+  updatedAt:     timestamp('updated_at').notNull().defaultNow(),
+});
+
 export const leadershipRequests = pgTable('leadership_requests', {
   id:          uuid('id').primaryKey().defaultRandom(),
   bandId:      uuid('band_id').notNull().references(() => bands.id, { onDelete: 'cascade' }),

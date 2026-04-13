@@ -22,6 +22,7 @@ import usersRouter        from './routes/users.js';
 import syncRouter         from './routes/sync.js';
 import spotifyRouter      from './routes/spotify.js';
 import venuesRouter       from './routes/venues.js';
+import { bandInvitationsRouter, userInvitationsRouter } from './routes/invitations.js';
 
 const PORT         = parseInt(process.env.PORT ?? '3001', 10);
 const FRONTEND_URL = process.env.FRONTEND_URL ?? 'https://setlist.kirknet.io';
@@ -84,6 +85,8 @@ app.route('/api/users',                      usersRouter);
 app.route('/api/sync',                       syncRouter);
 app.route('/api/spotify',                    spotifyRouter);
 app.route('/api/venues',                     venuesRouter);
+app.route('/api/bands/:bandId/invitations', bandInvitationsRouter);
+app.route('/api/invitations',               userInvitationsRouter);
 
 // ── App status (used by useAppStatus on the frontend) ─────────────
 app.get('/api/status', (c) => {

@@ -37,6 +37,15 @@ const Login = () => {
   const navigate      = useNavigate();
   const { checkSession } = useAuth();
   const { theme }     = useTheme();
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const joinCode = params.get('joinCode');
+    if (joinCode) {
+      sessionStorage.setItem('pendingJoinCode', joinCode);
+    }
+  }, []);
+
   const [loading, setLoading]         = useState(false);
   const [email, setEmail]             = useState('');
   const [password, setPassword]       = useState('');

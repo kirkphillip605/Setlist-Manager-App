@@ -23,7 +23,7 @@ A React + Vite PWA / Capacitor app for band setlist and gig management with full
 - **SMS**: Twilio (`server/src/lib/sms.ts`)
 - **Database**: PostgreSQL via Drizzle ORM (`server/src/db/`)
 - **Real-time**: WebSocket server + PostgreSQL LISTEN/NOTIFY loop
-- **Routes**: `/api/bands`, `/api/bands/:bandId/songs`, `/api/bands/:bandId/setlists`, `/api/bands/:bandId/gigs`, `/api/bands/:bandId/gig-sessions`, `/api/users`, `/api/sync`, `/api/spotify`, `/api/venues`, `/api/status`
+- **Routes**: `/api/bands`, `/api/bands/:bandId/songs`, `/api/bands/:bandId/setlists`, `/api/bands/:bandId/gigs`, `/api/bands/:bandId/gig-sessions`, `/api/bands/:bandId/invitations`, `/api/invitations`, `/api/users`, `/api/sync`, `/api/spotify`, `/api/venues`, `/api/status`
 - **Auth Handler**: `app.on(['GET','POST','PUT','PATCH','DELETE','OPTIONS'], '/api/auth/**', ...)` — all HTTP methods
 
 ### Domains
@@ -33,7 +33,8 @@ A React + Vite PWA / Capacitor app for band setlist and gig management with full
 ## Multi-Tenant Model
 
 - Each **band** is a tenant (table: `bands`)
-- Users join bands via a 6-character `join_code` (requires manager approval)
+- Users join bands via a 6-character `join_code` (requires manager approval) or via email/SMS invitation
+- Band invitations: `band_invitations` table tracks invites sent to email/phone, with status tracking (pending/accepted/declined/expired)
 - Per-band roles: `owner` | `manager` | `member`
 - Platform roles: `platform_admin` | `user` (on the `users` table)
 - All data tables (`songs`, `setlists`, `gigs`, etc.) have a `band_id` foreign key
