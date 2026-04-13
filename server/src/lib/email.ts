@@ -120,6 +120,22 @@ export async function sendMagicLinkEmail(email: string, url: string, userName?: 
   });
 }
 
+export async function sendPhoneReassignmentEmail(email: string, phone: string, userName?: string) {
+  const maskedPhone = phone.replace(/(\d{3})\d+(\d{4})/, '$1****$2');
+  return sendEmail({
+    to: email,
+    toName: userName,
+    subject: 'Your phone number was reassigned on SetlistPRO',
+    textBody: `The phone number ${maskedPhone} previously associated with your SetlistPRO account has been reassigned to another account. If this was not expected, please contact support.`,
+    htmlBody: `
+      <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:24px">
+        <h2 style="color:#1a1a1a">Phone Number Reassigned</h2>
+        <p>The phone number <strong>${maskedPhone}</strong> previously associated with your SetlistPRO account has been reassigned to another account.</p>
+        <p style="color:#666;font-size:13px">If this was not expected, please contact support or add a new phone number in your profile settings.</p>
+      </div>`,
+  });
+}
+
 export async function sendOTPEmail(email: string, otp: string, userName?: string) {
   return sendEmail({
     to: email,

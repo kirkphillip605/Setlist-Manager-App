@@ -218,6 +218,7 @@ export interface Profile {
   avatar_url?: string;
   platform_role: PlatformRole;
   is_active: boolean;
+  is_profile_complete?: boolean;
   preferences?: UserPreferences;
   deleted_at?: string | null;
 }

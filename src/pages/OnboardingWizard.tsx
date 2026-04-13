@@ -1,46 +1,87 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
-import { apiPatch } from '@/lib/apiFetch';
+import { updateUserProfile, setInitialPassword } from '@/lib/authClient';
+import { apiGet, apiPatch, apiPost } from '@/lib/apiFetch';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
-import { Loader2, User, CheckCircle2 } from 'lucide-react';
+import { Loader2, User, CheckCircle2, Shield, ArrowRight, Lock } from 'lucide-react';
 import { toast } from 'sonner';
 import { LoadingDialog } from '@/components/LoadingDialog';
+
+type OnboardingStep = 'name' | 'password' | '2fa-prompt';
+
+interface AuthProviderInfo {
+  providers: string[];
+  hasPassword: boolean;
+  hasOAuth: boolean;
+}
 
 const OnboardingWizard = () => {
   const { user, profile, refreshProfile, signOut } = useAuth();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
+  const [step, setStep] = useState<OnboardingStep>('name');
 
   const [firstName, setFirstName]  = useState('');
   const [lastName,  setLastName]   = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [providerInfo, setProviderInfo] = useState<AuthProviderInfo | null>(null);
   const initializedRef = useRef(false);
 
-  // Pre-fill from profile or OAuth metadata (runs once)
+  const profileCompleteOnMount = useRef(profile?.is_profile_complete ?? false);
+
+  useEffect(() => {
+    if (profileCompleteOnMount.current) {
+      navigate('/', { replace: true });
+      return;
+    }
+    apiGet<AuthProviderInfo>('/api/users/me/auth-providers').then(setProviderInfo).catch(() => {});
+  }, [navigate]);
+
   useEffect(() => {
     if (initializedRef.current) return;
     if (profile?.first_name) setFirstName(profile.first_name);
     if (profile?.last_name)  setLastName(profile.last_name);
     if (profile?.first_name || profile?.last_name) { initializedRef.current = true; return; }
 
-    // Try Google OAuth metadata
-    const meta = (user as any)?.user_metadata ?? {};
-    if (meta.full_name) {
-      const parts = meta.full_name.split(' ');
-      setFirstName(parts[0] ?? '');
-      setLastName(parts.slice(1).join(' ') ?? '');
-      initializedRef.current = true;
-    } else if (meta.given_name) {
-      setFirstName(meta.given_name  ?? '');
-      setLastName(meta.family_name  ?? '');
-      initializedRef.current = true;
+    if (user?.name && !initializedRef.current) {
+      const parts = user.name.split(' ');
+      if (parts.length >= 2) {
+        setFirstName(parts[0] ?? '');
+        setLastName(parts.slice(1).join(' ') ?? '');
+        initializedRef.current = true;
+      }
     }
   }, [profile, user]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const advanceAfterName = async () => {
+    if (!providerInfo) {
+      toast.error('Unable to determine account type. Please try again.');
+      return;
+    }
+    if (!providerInfo.hasPassword) {
+      setStep('password');
+      return;
+    }
+    try {
+      await apiPost<{ is_profile_complete: boolean }>('/api/users/me/complete-profile', {});
+      await refreshProfile();
+      setStep('2fa-prompt');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : '';
+      if (msg.includes('MISSING_PASSWORD') || msg.includes('Password is required')) {
+        setStep('password');
+      } else {
+        toast.error('Failed to complete profile. Please try again.');
+      }
+    }
+  };
+
+  const handleNameSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!firstName.trim() || !lastName.trim()) {
       toast.error('Please enter your first and last name');
@@ -48,15 +89,155 @@ const OnboardingWizard = () => {
     }
     setLoading(true);
     try {
-      await apiPatch('/api/users/me', { first_name: firstName.trim(), last_name: lastName.trim() });
+      const authResult = await updateUserProfile({
+        name: `${firstName.trim()} ${lastName.trim()}`,
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+      });
+      if (authResult?.error) {
+        toast.error(authResult.error.message || 'Failed to update auth profile');
+        setLoading(false);
+        return;
+      }
+
+      await apiPatch('/api/users/me', {
+        first_name: firstName.trim(),
+        last_name: lastName.trim(),
+      });
+
       await refreshProfile();
-      navigate('/');
-    } catch (err: any) {
-      toast.error(err?.message ?? 'Failed to save profile');
+      advanceAfterName();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to save profile');
     } finally {
       setLoading(false);
     }
   };
+
+  const handlePasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newPassword.length < 8) {
+      toast.error('Password must be at least 8 characters');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      toast.error('Passwords do not match');
+      return;
+    }
+    setLoading(true);
+    try {
+      const result = await setInitialPassword({ newPassword });
+      if (result?.error) {
+        toast.error(result.error.message || 'Failed to set password');
+        setLoading(false);
+        return;
+      }
+
+      await apiPost('/api/users/me/complete-profile', {});
+      await refreshProfile();
+      toast.success('Password set successfully');
+      setStep('2fa-prompt');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to set password');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSkip2FA = async () => {
+    await refreshProfile();
+    navigate('/');
+  };
+
+  const handleSetup2FA = () => {
+    navigate('/2fa-setup');
+  };
+
+  if (step === 'password') {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background p-4 overflow-y-auto">
+        <LoadingDialog open={loading} message="Setting password..." />
+        <Card className="w-full max-w-md border-border shadow-lg my-auto">
+          <CardHeader className="text-center">
+            <div className="mx-auto bg-primary/10 p-4 rounded-full mb-3">
+              <Lock className="h-8 w-8 text-primary" />
+            </div>
+            <CardTitle className="text-2xl">Set a Password</CardTitle>
+            <CardDescription>
+              Set a password so you can also sign in with your email and password.
+            </CardDescription>
+          </CardHeader>
+
+          <form onSubmit={handlePasswordSubmit}>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="new-password">Password</Label>
+                <Input
+                  id="new-password"
+                  type="password"
+                  placeholder="At least 8 characters"
+                  value={newPassword}
+                  onChange={e => setNewPassword(e.target.value)}
+                  autoFocus
+                  required
+                  minLength={8}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="confirm-password">Confirm Password</Label>
+                <Input
+                  id="confirm-password"
+                  type="password"
+                  placeholder="Re-enter password"
+                  value={confirmPassword}
+                  onChange={e => setConfirmPassword(e.target.value)}
+                  required
+                />
+              </div>
+            </CardContent>
+
+            <CardFooter className="flex flex-col gap-2 pt-2">
+              <Button type="submit" className="w-full" disabled={loading}>
+                {loading
+                  ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  : <Lock className="mr-2 h-4 w-4" />}
+                Set Password
+              </Button>
+            </CardFooter>
+          </form>
+        </Card>
+      </div>
+    );
+  }
+
+  if (step === '2fa-prompt') {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background p-4 overflow-y-auto">
+        <Card className="w-full max-w-md border-border shadow-lg my-auto">
+          <CardHeader className="text-center">
+            <div className="mx-auto bg-primary/10 p-4 rounded-full mb-3">
+              <Shield className="h-8 w-8 text-primary" />
+            </div>
+            <CardTitle className="text-2xl">Secure Your Account</CardTitle>
+            <CardDescription>
+              Add two-factor authentication for extra security. You can always set this up later in your profile settings.
+            </CardDescription>
+          </CardHeader>
+
+          <CardFooter className="flex flex-col gap-2 pt-2">
+            <Button className="w-full" onClick={handleSetup2FA}>
+              <Shield className="mr-2 h-4 w-4" />
+              Set Up 2FA
+            </Button>
+            <Button type="button" variant="ghost" size="sm" className="w-full" onClick={handleSkip2FA}>
+              Skip for now
+              <ArrowRight className="ml-2 h-4 w-4" />
+            </Button>
+          </CardFooter>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4 overflow-y-auto">
@@ -72,7 +253,7 @@ const OnboardingWizard = () => {
           </CardDescription>
         </CardHeader>
 
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleNameSubmit}>
           <CardContent className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="first-name">First Name</Label>
@@ -93,8 +274,8 @@ const OnboardingWizard = () => {
           </CardContent>
 
           <CardFooter className="flex flex-col gap-2 pt-2">
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading
+            <Button type="submit" className="w-full" disabled={loading || !providerInfo}>
+              {(loading || !providerInfo)
                 ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 : <CheckCircle2 className="mr-2 h-4 w-4" />}
               Save &amp; Continue

@@ -14,6 +14,8 @@ import AuthCallback       from './pages/AuthCallback';
 import UpdatePassword     from './pages/UpdatePassword';
 import VerifyEmail        from './pages/VerifyEmail';
 import OnboardingWizard   from './pages/OnboardingWizard';
+import TwoFactorSetup     from './pages/TwoFactorSetup';
+import TwoFactorChallenge from './pages/TwoFactorChallenge';
 import SongList           from './pages/SongList';
 import SongEdit           from './pages/SongEdit';
 import SongDetail         from './pages/SongDetail';
@@ -69,10 +71,7 @@ const ProtectedRoute = ({ children, requireBand = true }: { children: JSX.Elemen
     return children;
   }
 
-  // Profile completion check — just name required (position is per-band now)
-  const isProfileComplete = profile && profile.first_name && profile.last_name;
-
-  if (!isProfileComplete) {
+  if (!profile?.is_profile_complete) {
     if (location.pathname !== '/onboarding') return <Navigate to="/onboarding" replace />;
     return children;
   }
@@ -85,7 +84,6 @@ const ProtectedRoute = ({ children, requireBand = true }: { children: JSX.Elemen
 
   // Redirect away from special pages once conditions are met
   if (location.pathname === '/reactivate' && profile?.is_active) return <Navigate to="/" replace />;
-  if (location.pathname === '/onboarding' && isProfileComplete)   return <Navigate to="/" replace />;
   if (location.pathname === '/bands/setup' && !noBands)           return <Navigate to="/" replace />;
 
   return <DataHydration>{children}</DataHydration>;
@@ -98,7 +96,7 @@ const PublicOnlyRoute = ({ children }: { children: JSX.Element }) => {
 
   if (loading) return null;
   if (user) {
-    const from = (location.state as any)?.from?.pathname || '/';
+    const from = (location.state as { from?: { pathname?: string } } | null)?.from?.pathname || '/';
     return <Navigate to={from} replace />;
   }
   return children;
@@ -135,6 +133,8 @@ const AppContent = () => {
         <Route path="/update-password"  element={<UpdatePassword />} />
 
         <Route path="/onboarding"       element={<ProtectedRoute requireBand={false}><OnboardingWizard /></ProtectedRoute>} />
+        <Route path="/2fa-setup"        element={<ProtectedRoute requireBand={false}><TwoFactorSetup /></ProtectedRoute>} />
+        <Route path="/2fa-challenge"    element={<TwoFactorChallenge />} />
         <Route path="/pending"          element={<ProtectedRoute requireBand={false}><PendingApproval /></ProtectedRoute>} />
         <Route path="/reactivate"       element={<ProtectedRoute requireBand={false}><ReactivateAccount /></ProtectedRoute>} />
         <Route path="/bands/setup"      element={<ProtectedRoute requireBand={false}><BandSetup /></ProtectedRoute>} />

@@ -9,7 +9,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { apiPatch, apiDel } from '@/lib/apiFetch';
-import { authClient } from '@/lib/authClient';
+import { updateUserProfile, changeUserPassword } from '@/lib/authClient';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Loader2, Save, LogOut, ShieldAlert, Cloud, Trash2 } from 'lucide-react';
@@ -54,14 +54,20 @@ const Profile = () => {
     e.preventDefault();
     setSaving(true);
     try {
+      await updateUserProfile({
+        name: `${firstName.trim()} ${lastName.trim()}`,
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+      });
+
       await apiPatch('/api/users/me', {
         first_name: firstName.trim(),
         last_name:  lastName.trim(),
       });
       await refreshProfile();
       toast.success('Profile updated successfully');
-    } catch (err: any) {
-      toast.error('Failed to update profile: ' + (err?.message ?? 'Unknown error'));
+    } catch (err) {
+      toast.error('Failed to update profile: ' + (err instanceof Error ? err.message : 'Unknown error'));
     } finally {
       setSaving(false);
     }
@@ -74,16 +80,17 @@ const Profile = () => {
     if (newPw.length < 8)    { toast.error('Password must be at least 8 characters'); return; }
     setPwSaving(true);
     try {
-      const { error } = await (authClient as any).changePassword({
+      const result = await changeUserPassword({
         currentPassword: currentPw,
         newPassword:     newPw,
         revokeOtherSessions: false,
       });
+      const error = result?.error;
       if (error) throw new Error(error.message ?? 'Failed to update password');
       toast.success('Password updated successfully');
       setCurrentPw(''); setNewPw(''); setConfirmPw('');
-    } catch (err: any) {
-      toast.error(err?.message ?? 'Failed to update password');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to update password');
     } finally {
       setPwSaving(false);
     }

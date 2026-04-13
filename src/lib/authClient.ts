@@ -3,9 +3,11 @@ import { inferAdditionalFields } from 'better-auth/client/plugins';
 import { magicLinkClient } from 'better-auth/client/plugins';
 import { emailOTPClient } from 'better-auth/client/plugins';
 import { phoneNumberClient } from 'better-auth/client/plugins';
+import { twoFactorClient } from 'better-auth/client/plugins';
 import type { Profile } from '@/types';
 
 const API_URL = import.meta.env.VITE_API_URL as string;
+const AUTH_BASE = `${API_URL}/api/auth`;
 
 type ForgetPasswordData = { email: string; redirectTo?: string };
 type AuthFetchResult = Promise<{ data: unknown; error: { message: string; status: number } | null }>;
@@ -18,39 +20,108 @@ const emailAndPasswordClient = () => ({
   }),
 });
 
+interface AdditionalUserFields {
+  firstName?: string | null;
+  lastName?: string | null;
+  phone?: string | null;
+  phoneVerified?: boolean;
+  platformRole?: string;
+  isActive?: boolean;
+  isProfileComplete?: boolean;
+  preferences?: string | Record<string, unknown>;
+}
+
 export const authClient = createAuthClient({
-  baseURL: `${API_URL}/api/auth`,
+  baseURL: AUTH_BASE,
   plugins: [
     emailAndPasswordClient(),
     magicLinkClient(),
     emailOTPClient(),
     phoneNumberClient(),
-    inferAdditionalFields<{
-      user: {
-        firstName?: string;
-        lastName?: string;
-        phone?: string;
-        phoneVerified?: boolean;
-        platformRole?: string;
-        isActive?: boolean;
-        preferences?: string;
-      };
-    }>(),
+    twoFactorClient(),
+    inferAdditionalFields<{ user: AdditionalUserFields }>(),
   ],
 });
 
 export type AuthSession = typeof authClient.$Infer.Session;
 export type AuthUser    = typeof authClient.$Infer.Session.user;
 
-export const mapAuthUserToProfile = (user: AuthUser): Profile => ({
-  id:            user.id,
-  email:         user.email,
-  first_name:    (user as any).firstName ?? null,
-  last_name:     (user as any).lastName  ?? null,
-  avatar_url:    user.image ?? undefined,
-  platform_role: ((user as any).platformRole ?? 'user') as Profile['platform_role'],
-  is_active:     (user as any).isActive ?? true,
-  preferences:   typeof (user as any).preferences === 'string'
-                   ? JSON.parse((user as any).preferences)
-                   : (user as any).preferences,
-});
+type UserWithFields = AuthUser & AdditionalUserFields;
+
+interface AuthApiResult<T = Record<string, unknown>> {
+  data?: T | null;
+  error?: { message: string; status?: number } | null;
+}
+
+async function authFetch<T = Record<string, unknown>>(
+  path: string,
+  body?: Record<string, unknown>
+): Promise<AuthApiResult<T>> {
+  const res = await fetch(`${AUTH_BASE}${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const json = await res.json();
+  if (!res.ok) {
+    return { error: { message: json?.message ?? json?.error ?? 'Request failed', status: res.status } };
+  }
+  return { data: json as T };
+}
+
+interface TwoFactorEnableData {
+  totpURI?: string;
+  backupCodes?: string[];
+}
+
+export const twoFactor = {
+  enable: (opts: { password?: string }) =>
+    authFetch<TwoFactorEnableData>('/two-factor/enable', opts),
+  verifyTotp: (opts: { code: string }) =>
+    authFetch('/two-factor/verify-totp', opts),
+  verifyBackupCode: (opts: { code: string }) =>
+    authFetch('/two-factor/verify-backup-code', opts),
+  sendOtp: () =>
+    authFetch('/two-factor/send-otp'),
+  verifyOtp: (opts: { code: string }) =>
+    authFetch('/two-factor/verify-otp', opts),
+};
+
+export const updateUserProfile = (fields: {
+  name?: string;
+  firstName?: string;
+  lastName?: string;
+  image?: string;
+}) => authFetch('/update-user', fields);
+
+export const changeUserPassword = (opts: {
+  currentPassword: string;
+  newPassword: string;
+  revokeOtherSessions?: boolean;
+}) => authFetch('/change-password', opts);
+
+export const resetUserPassword = (opts: {
+  newPassword: string;
+}) => authFetch('/update-password', opts);
+
+export const setInitialPassword = (opts: {
+  newPassword: string;
+}) => authFetch('/set-password', opts);
+
+export const mapAuthUserToProfile = (user: AuthUser): Profile => {
+  const u = user as UserWithFields;
+  return {
+    id:                  u.id,
+    email:               u.email,
+    first_name:          u.firstName ?? null,
+    last_name:           u.lastName ?? null,
+    avatar_url:          u.image ?? undefined,
+    platform_role:       (u.platformRole ?? 'user') as Profile['platform_role'],
+    is_active:           u.isActive ?? true,
+    is_profile_complete: u.isProfileComplete ?? false,
+    preferences:         typeof u.preferences === 'string'
+                           ? JSON.parse(u.preferences)
+                           : (u.preferences as Profile['preferences']),
+  };
+};

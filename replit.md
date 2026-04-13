@@ -7,8 +7,8 @@ A React + Vite PWA / Capacitor app for band setlist and gig management with full
 ### Frontend
 - **Framework**: React 18 + Vite 5 + TypeScript
 - **Routing**: React Router v6
-- **Auth**: BetterAuth client (`better-auth/react`) — email/password, Google OAuth, magic link, email OTP, phone/SMS
-- **Auth Plugins**: `emailAndPasswordClient`, `magicLinkClient`, `emailOTPClient`, `phoneNumberClient`, `inferAdditionalFields`
+- **Auth**: BetterAuth client (`better-auth/react`) — email/password, Google OAuth, magic link, email OTP, phone/SMS, 2FA
+- **Auth Plugins**: `emailAndPasswordClient`, `magicLinkClient`, `emailOTPClient`, `phoneNumberClient`, `twoFactorClient`, `inferAdditionalFields`
 - **State**: Zustand (per-band store with bootstrap/delta sync), TanStack Query (offline-persist)
 - **Styling**: Tailwind CSS + shadcn/ui
 - **Real-time**: WebSocket client (`src/lib/wsClient.ts`)
@@ -18,7 +18,7 @@ A React + Vite PWA / Capacitor app for band setlist and gig management with full
 
 ### Backend (Hono + BetterAuth)
 - **Server**: Hono (Node.js) at `api.setlist.kirknet.io`
-- **Auth**: BetterAuth with plugins: `bearer`, `magicLink`, `emailOTP`, `phoneNumber`
+- **Auth**: BetterAuth with plugins: `bearer`, `magicLink`, `emailOTP`, `phoneNumber`, `twoFactor` + built-in rate limiting
 - **Email**: Mailjet transactional email (`server/src/lib/email.ts`)
 - **SMS**: Twilio (`server/src/lib/sms.ts`)
 - **Database**: PostgreSQL via Drizzle ORM (`server/src/db/`)
@@ -70,10 +70,34 @@ A React + Vite PWA / Capacitor app for band setlist and gig management with full
 
 1. Sign in via email/password, Google OAuth, magic link, or email OTP
 2. BetterAuth sets an httpOnly session cookie (365-day expiry by default)
-3. `AuthContext` uses `authClient.useSession()` for reactive session state
-4. `ProtectedRoute` checks: logged in → account active → profile complete → has ≥1 band
-5. If no bands → `/bands/setup` (create or join)
-6. Bearer token plugin enables API auth for mobile apps without cookies
+3. `AuthContext` uses one-shot `authClient.getSession()` with cookie-presence check (no polling); all consumers (BandContext, useSyncedData) derive auth state from AuthContext
+4. `ProtectedRoute` checks: logged in → account active → profile complete (`isProfileComplete`) → has ≥1 band
+5. If profile incomplete → `/onboarding` (name entry, then optional 2FA prompt)
+6. If no bands → `/bands/setup` (create or join)
+7. Bearer token plugin enables API auth for mobile apps without cookies
+8. 2FA intercepts login when enabled — challenge screen at `/2fa-challenge` (TOTP, email OTP, recovery codes)
+9. Rate limiting enforced server-side (30 req/60s window)
+
+### Auth Bug Fixes Applied
+- **Onboarding loop fixed**: `authClient.updateUser()` updates BetterAuth session cache atomically alongside `apiPatch` to `/api/users/me`
+- **No session polling**: All `authClient.useSession()` calls replaced with state-based auth (AuthProvider one-shot getSession with cookie-presence check, BandContext/useSyncedData derive from AuthContext); WS client guards against no-session connections; Login.tsx does zero getSession calls
+- **Sign-up convergence**: Attempting to sign up with an existing email transitions to Sign In tab with email pre-filled
+- **Name fields removed from sign-up**: Registration only collects email + password; name is collected during onboarding
+
+### 2FA Support
+- Two-factor auth via BetterAuth's `twoFactor` plugin (TOTP + email OTP)
+- Setup wizard at `/2fa-setup` with QR code, verify, and recovery code confirmation
+- Challenge screen at `/2fa-challenge` with TOTP, email OTP, or recovery code options
+- Prompted (but skippable) after onboarding completion
+- OAuth users prompted to set password during onboarding (progressive completion wall)
+
+### Type Safety
+- All auth-related `as any` casts replaced with typed helpers in `src/lib/authClient.ts`: `twoFactor` namespace, `updateUserProfile()`, `changeUserPassword()`, `resetUserPassword()`, `setInitialPassword()`
+- `GET /api/users/me/auth-providers` — returns provider info for progressive onboarding
+
+### Phone Number Reassignment
+- `POST /api/users/me/reassign-phone` transfers verified numbers between users
+- Previous owner notified via transactional email
 
 ## Session Persistence
 

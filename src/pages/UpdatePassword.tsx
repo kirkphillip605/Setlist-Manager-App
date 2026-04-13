@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { authClient } from '@/lib/authClient';
+import { resetUserPassword } from '@/lib/authClient';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -22,7 +22,8 @@ const UpdatePassword = () => {
     }
     setLoading(true);
 
-    const { error } = await (authClient as any).updatePassword({ newPassword: password });
+    const result = await resetUserPassword({ newPassword: password });
+    const error = result?.error;
 
     if (error) {
       toast.error(error.message ?? 'Failed to update password');

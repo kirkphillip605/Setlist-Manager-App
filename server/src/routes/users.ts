@@ -2,9 +2,11 @@ import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
 import { db } from '../db/index.js';
-import { users, bandMemberships, bands } from '../db/schema.js';
-import { and, eq, isNull } from 'drizzle-orm';
+import { users, accounts, bandMemberships, bands } from '../db/schema.js';
+import { and, eq, isNull, ne } from 'drizzle-orm';
 import { requireAuth, requirePlatformAdmin, type AuthVariables } from '../middleware/auth.js';
+import { sendPhoneReassignmentEmail } from '../lib/email.js';
+import { auth } from '../auth.js';
 
 const app = new Hono<{ Variables: AuthVariables }>();
 
@@ -24,16 +26,61 @@ app.get('/me', requireAuth, async (c) => {
     .where(and(eq(bandMemberships.userId, userId), isNull(bandMemberships.deletedAt), isNull(bands.deletedAt)));
 
   return c.json({
-    id:            user.id,
-    email:         user.email,
-    first_name:    user.firstName,
-    last_name:     user.lastName,
-    avatar_url:    user.image,
-    platform_role: user.platformRole,
-    is_active:     user.isActive,
-    preferences:   user.preferences,
+    id:                  user.id,
+    email:               user.email,
+    first_name:          user.firstName,
+    last_name:           user.lastName,
+    avatar_url:          user.image,
+    platform_role:       user.platformRole,
+    is_active:           user.isActive,
+    is_profile_complete: user.isProfileComplete,
+    preferences:         user.preferences,
     bands: memberships.map(r => ({ ...r.band, membership: r.membership })),
   });
+});
+
+const emailCheckLimiter = new Map<string, { count: number; resetAt: number }>();
+const EMAIL_CHECK_WINDOW = 60_000;
+const EMAIL_CHECK_MAX = 5;
+
+app.post('/check-email', zValidator('json', z.object({
+  email: z.string().email(),
+})), async (c) => {
+  const ip = c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown';
+  const now = Date.now();
+  const entry = emailCheckLimiter.get(ip);
+  if (entry && entry.resetAt > now) {
+    if (entry.count >= EMAIL_CHECK_MAX) {
+      return c.json({ error: 'Too many requests' }, 429);
+    }
+    entry.count++;
+  } else {
+    emailCheckLimiter.set(ip, { count: 1, resetAt: now + EMAIL_CHECK_WINDOW });
+  }
+
+  const { email } = c.req.valid('json');
+  const [existing] = await db.select({ id: users.id })
+    .from(users).where(eq(users.email, email.toLowerCase())).limit(1);
+
+  await new Promise(r => setTimeout(r, 200 + Math.random() * 300));
+
+  return c.json({
+    exists: !!existing,
+    code: existing ? 'EMAIL_ALREADY_EXISTS' : null,
+  });
+});
+
+app.get('/me/auth-providers', requireAuth, async (c) => {
+  const userId = c.get('userId');
+  const userAccounts = await db.select({
+    providerId: accounts.providerId,
+  }).from(accounts).where(eq(accounts.userId, userId));
+
+  const providers = userAccounts.map(a => a.providerId);
+  const hasPassword = providers.includes('credential');
+  const hasOAuth = providers.some(p => p !== 'credential' && p !== 'email-otp');
+
+  return c.json({ providers, hasPassword, hasOAuth });
 });
 
 // PATCH /api/users/me — update own profile
@@ -52,16 +99,107 @@ app.patch('/me', requireAuth,
     if (body.last_name   !== undefined) updates.lastName    = body.last_name;
     if (body.preferences !== undefined) updates.preferences = body.preferences;
 
+    const [current] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+    const finalFirstName = (body.first_name ?? current?.firstName) || null;
+    const finalLastName  = (body.last_name  ?? current?.lastName)  || null;
+
+    let shouldCompleteProfile = false;
+    if (finalFirstName && finalLastName && !current?.isProfileComplete) {
+      const userAccounts = await db.select({ providerId: accounts.providerId })
+        .from(accounts).where(eq(accounts.userId, userId));
+      const hasCredential = userAccounts.some(a => a.providerId === 'credential');
+      if (hasCredential) {
+        shouldCompleteProfile = true;
+        updates.isProfileComplete = true;
+      }
+    }
+
     const [user] = await db.update(users).set(updates).where(eq(users.id, userId)).returning();
     return c.json({
-      id:            user.id,
-      email:         user.email,
-      first_name:    user.firstName,
-      last_name:     user.lastName,
-      avatar_url:    user.image,
-      platform_role: user.platformRole,
-      is_active:     user.isActive,
-      preferences:   user.preferences,
+      id:                  user.id,
+      email:               user.email,
+      first_name:          user.firstName,
+      last_name:           user.lastName,
+      avatar_url:          user.image,
+      platform_role:       user.platformRole,
+      is_active:           user.isActive,
+      is_profile_complete: user.isProfileComplete,
+      preferences:         user.preferences,
+    });
+  }
+);
+
+app.post('/me/complete-profile', requireAuth, async (c) => {
+  const userId = c.get('userId');
+  const [current] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+  if (!current) return c.json({ error: 'User not found' }, 404);
+
+  if (!current.firstName || !current.lastName) {
+    return c.json({ error: 'Name fields are required', code: 'MISSING_NAME' }, 400);
+  }
+
+  const userAccounts = await db.select({ providerId: accounts.providerId })
+    .from(accounts).where(eq(accounts.userId, userId));
+  const hasCredential = userAccounts.some(a => a.providerId === 'credential');
+  if (!hasCredential) {
+    return c.json({ error: 'Password is required before completing profile', code: 'MISSING_PASSWORD' }, 400);
+  }
+
+  await auth.api.updateUser({
+    body: { isProfileComplete: true },
+    headers: c.req.raw.headers,
+  });
+
+  return c.json({
+    is_profile_complete: true,
+  });
+});
+
+// POST /api/users/me/reassign-phone — reassign verified phone number from another user
+// This should only be called AFTER the phone has been verified via BetterAuth's phone OTP flow.
+// The caller must pass the verified phone number; the server checks that the current user
+// already has this phone marked as verified (set by BetterAuth's phoneNumber plugin),
+// then handles reassignment from any previous owner.
+app.post('/me/reassign-phone', requireAuth,
+  zValidator('json', z.object({
+    phone: z.string().min(1),
+  })),
+  async (c) => {
+    const userId = c.get('userId');
+    const { phone } = c.req.valid('json');
+
+    const [currentUser] = await db.select()
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+
+    if (!currentUser || currentUser.phone !== phone || !currentUser.phoneVerified) {
+      return c.json({ error: 'Phone number must be verified via OTP before reassignment' }, 400);
+    }
+
+    const [existingUser] = await db.select()
+      .from(users)
+      .where(and(eq(users.phone, phone), ne(users.id, userId)))
+      .limit(1);
+
+    if (existingUser) {
+      await db.update(users)
+        .set({ phone: null, phoneVerified: false, updatedAt: new Date() })
+        .where(eq(users.id, existingUser.id));
+
+      try {
+        if (existingUser.email) {
+          await sendPhoneReassignmentEmail(existingUser.email, phone, existingUser.firstName ?? undefined);
+        }
+      } catch (err) {
+        console.error('[Users] Failed to send phone reassignment notification:', err);
+      }
+    }
+
+    return c.json({
+      id:            currentUser.id,
+      phone:         currentUser.phone,
+      phoneVerified: currentUser.phoneVerified,
     });
   }
 );

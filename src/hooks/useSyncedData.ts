@@ -4,12 +4,9 @@ import { useEffect, useMemo, useCallback } from 'react';
 import { useBand } from '@/context/BandContext';
 import { getAllSkippedSongs } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
-import { authClient } from '@/lib/authClient';
-
-// ── Sync Manager ──────────────────────────────────────────────────
 
 export const useSyncManager = () => {
-  const { isPending } = authClient.useSession();
+  const { loading: isPending } = useAuth();
   const initialize     = useStore(state => state.initialize);
   const syncAllDeltas  = useStore(state => state.syncAllDeltas);
   const setOnlineStatus = useStore(state => state.setOnlineStatus);

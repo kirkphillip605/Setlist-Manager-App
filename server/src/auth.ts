@@ -4,6 +4,7 @@ import { bearer } from 'better-auth/plugins/bearer';
 import { magicLink } from 'better-auth/plugins/magic-link';
 import { emailOTP } from 'better-auth/plugins/email-otp';
 import { phoneNumber } from 'better-auth/plugins/phone-number';
+import { twoFactor } from 'better-auth/plugins/two-factor';
 import { db } from './db/index.js';
 import * as schema from './db/schema.js';
 import {
@@ -38,6 +39,7 @@ export const auth = betterAuth({
       session:      schema.sessions,
       account:      schema.accounts,
       verification: schema.verifications,
+      twoFactor:    schema.twoFactors,
     },
   }),
 
@@ -78,10 +80,11 @@ export const auth = betterAuth({
       firstName:     { type: 'string',  required: false, input: true },
       lastName:      { type: 'string',  required: false, input: true },
       phone:         { type: 'string',  required: false, input: true },
-      phoneVerified: { type: 'boolean', required: false, input: false },
-      platformRole:  { type: 'string',  required: false, input: false, defaultValue: 'user' },
-      isActive:      { type: 'boolean', required: false, input: false, defaultValue: true },
-      preferences:   { type: 'string',  required: false, input: true },
+      phoneVerified:     { type: 'boolean', required: false, input: false },
+      platformRole:      { type: 'string',  required: false, input: false, defaultValue: 'user' },
+      isActive:          { type: 'boolean', required: false, input: false, defaultValue: true },
+      isProfileComplete: { type: 'boolean', required: false, input: false, defaultValue: false },
+      preferences:       { type: 'string',  required: false, input: true },
     },
   },
 
@@ -131,7 +134,21 @@ export const auth = betterAuth({
       expiresIn: OTP_EXPIRY_SECONDS,
     }),
 
+    twoFactor({
+      issuer: 'SetlistPRO',
+      otpOptions: {
+        sendOTP: async ({ user, otp }) => {
+          await sendOTPEmail(user.email, otp, user.name);
+        },
+      },
+    }),
+
   ],
+
+  rateLimit: {
+    window: 60,
+    max: 30,
+  },
 });
 
 export type Auth = typeof auth;
